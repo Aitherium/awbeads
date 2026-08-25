@@ -1,0 +1,108 @@
+{
+  "name": "@aitheros/bead-space",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Embeddable force-graph universe \u2014 nodes as planets, dependencies as flight paths, active owners as orbiting/patrolling ships. Framework-agnostic core + React wrapper + AitherOS data adapters.",
+  "type": "module",
+  "_entrypoints": "Top-level entries point at SOURCE, publishConfig points at dist/ \u2014 the convention desktop-core, calendar-kit and creative-core use. AitherVeil lists this package in transpilePackages and compiles the TS itself, and the Veil image copies the directory in WITHOUT running its build, so a dist/ path here resolves only on a machine where someone ran `npm run build` by hand. When the package directory was deleted and restored from git, dist/ (gitignored build output) did not come back and every consumer broke with `Can't resolve '@aitheros/bead-space'`. npm swaps publishConfig in at publish time, so the published package is unchanged.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./react": {
+      "types": "./src/react/index.ts",
+      "import": "./src/react/index.ts"
+    },
+    "./adapters": {
+      "types": "./src/adapters/index.ts",
+      "import": "./src/adapters/index.ts"
+    },
+    "./adapters/*": [
+      "./dist/adapters/*.d.ts",
+      "./dist/adapters/*.js",
+      "./dist/adapters/*"
+    ],
+    "./bead-space.css": "./dist/bead-space.css"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "assets/",
+    "NOTICE.md"
+  ],
+  "publishConfig": {
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./react": {
+        "types": "./dist/react/index.d.ts",
+        "import": "./dist/react/index.js"
+      },
+      "./adapters": {
+        "types": "./dist/adapters/index.d.ts",
+        "import": "./dist/adapters/index.js"
+      },
+      "./adapters/*": [
+        "./dist/adapters/*.d.ts",
+        "./dist/adapters/*.js",
+        "./dist/adapters/*"
+      ],
+      "./bead-space.css": "./dist/bead-space.css"
+    },
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node -e \"const fs=require('fs'); fs.copyFileSync('src/bead-space.css', 'dist/bead-space.css')\"",
+    "typecheck": "tsc --noEmit",
+    "demo:data": "python demo/build-data.py",
+    "demo:build": "esbuild demo/main.ts --bundle --format=esm --outfile=demo/bundle.js",
+    "demo": "npm run demo:data && npm run demo:build && python -m http.server 8099 --bind 127.0.0.1",
+    "test": "esbuild test/ecosystem.ts --bundle --platform=node --format=esm --outfile=test/ecosystem.mjs --external:jsdom && node test/ecosystem.mjs && esbuild test/smoke.ts --bundle --platform=node --format=esm --outfile=test/smoke.mjs --external:jsdom && node test/smoke.mjs",
+    "check": "npm run typecheck && npm run test",
+    "test:ecosystem": "esbuild test/ecosystem.ts --bundle --platform=node --format=esm --outfile=test/ecosystem.mjs --external:jsdom && node test/ecosystem.mjs"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "d3-array": "^3.2.4",
+    "d3-drag": "^3.0.0",
+    "d3-force": "^3.0.0",
+    "d3-selection": "^3.0.0",
+    "d3-shape": "^3.2.0",
+    "d3-transition": "^3.0.1",
+    "d3-zoom": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/d3-array": "^3.2.1",
+    "@types/d3-drag": "^3.0.7",
+    "@types/d3-force": "^3.0.10",
+    "@types/d3-selection": "^3.0.11",
+    "@types/d3-shape": "^3.1.6",
+    "@types/d3-transition": "^3.0.9",
+    "@types/d3-zoom": "^3.0.8",
+    "@types/jsdom": "^28.0.3",
+    "@types/react": "^18.3.18",
+    "esbuild": "^0.25.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.8.2"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bead-space — AitherOS demo harness</title>
+    <link rel="stylesheet" href="../src/bead-space.css" />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: #060c15;
+        color: #eaf6ff;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 10px 16px;
+        border-bottom: 1px solid rgb(120 170 210 / 22%);
+      }
+      h1 { margin: 0; font-size: 15px; letter-spacing: 0.02em; }
+      #summary, #detail { font-size: 12px; color: #9eb1c5; }
+      #detail { margin-left: auto; }
+      button {
+        padding: 5px 11px;
+        border: 1px solid rgb(120 170 210 / 40%);
+        border-radius: 999px;
+        background: transparent;
+        color: #cfe6f8;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      button.active { background: rgb(114 215 255 / 18%); border-color: #72d7ff; color: #eaf8ff; }
+      #legend {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding: 7px 16px;
+        border-bottom: 1px solid rgb(120 170 210 / 14%);
+        font-size: 11px;
+        color: #b6cbdd;
+      }
+      #legend .chip { display: inline-flex; align-items: center; gap: 5px; }
+      #legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+      main { flex: 1; min-height: 0; }
+      #stage { width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>bead-space</h1>
+      <button type="button" data-source="debt">Debt ledger (real)</button>
+      <button type="button" data-source="constellation">Agent constellation</button>
+      <button type="button" data-source="fleet">Service fleet</button>
+      <button type="button" data-source="patrol">Patrol demo (synthetic)</button>
+      <button type="button" id="rebuild">Rebuild</button>
+      <span id="summary">loading…</span>
+      <span id="detail"></span>
+    </header>
+    <div id="legend"></div>
+    <main><div id="stage"></div></main>
+    <script type="module" src="./bundle.js"></script>
+  </body>
+</html>

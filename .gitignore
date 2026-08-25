@@ -1,0 +1,9 @@
+node_modules/
+dist/
+
+# Build artifacts — regenerate with `npm run demo:build` / `npm test`
+demo/bundle.js
+test/smoke.mjs
+
+# Generated from config/services.yaml + `docker ps` by `npm run demo:data`
+demo/data/

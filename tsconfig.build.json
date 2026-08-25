@@ -1,0 +1,44 @@
+{
+  "//": [
+    "EMIT config for `npm run build`. The package's build script has always run",
+    "`tsc -p tsconfig.build.json`, and this file did not exist -- so the build",
+    "failed with TS5058 'The specified path does not exist' and the package could",
+    "never be repacked.",
+    "",
+    "That is why the vendored bead-space tarball sat 15 source files behind HEAD:",
+    "not neglect, an impossible repack. check_tenant_pages TP017 reported the",
+    "staleness correctly and its suggested remedy -- 'npm run build && npm pack' --",
+    "could not succeed for anyone who tried it.",
+    "",
+    "tsconfig.json cannot serve: it sets noEmit:true (it is the typecheck config),",
+    "so pointing the build at it would produce no dist/ while exiting 0.",
+    "",
+    "Mirrors awkit/tsconfig.build.json, the sibling that works."
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node"],
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "emitDeclarationOnly": false
+  },
+  "include": ["src"],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/__tests__/**",
+    "**/selftest/**"
+  ]
+}
