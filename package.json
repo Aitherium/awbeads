@@ -1,10 +1,10 @@
 {
-  "name": "@aitheros/bead-space",
+  "name": "@aitherium/bead-space",
   "version": "0.1.0",
-  "private": true,
-  "description": "Embeddable force-graph universe \u2014 nodes as planets, dependencies as flight paths, active owners as orbiting/patrolling ships. Framework-agnostic core + React wrapper + AitherOS data adapters.",
+  "private": false,
+  "description": "Embeddable force-graph universe — nodes as planets, dependencies as flight paths, active owners as orbiting/patrolling ships. Framework-agnostic core + React wrapper + AitherOS data adapters.",
   "type": "module",
-  "_entrypoints": "Top-level entries point at SOURCE, publishConfig points at dist/ \u2014 the convention desktop-core, calendar-kit and creative-core use. AitherVeil lists this package in transpilePackages and compiles the TS itself, and the Veil image copies the directory in WITHOUT running its build, so a dist/ path here resolves only on a machine where someone ran `npm run build` by hand. When the package directory was deleted and restored from git, dist/ (gitignored build output) did not come back and every consumer broke with `Can't resolve '@aitheros/bead-space'`. npm swaps publishConfig in at publish time, so the published package is unchanged.",
+  "_entrypoints": "Top-level entries point at SOURCE, publishConfig points at dist/ — the convention desktop-core, calendar-kit and creative-core use. AitherVeil lists this package in transpilePackages and compiles the TS itself, and the Veil image copies the directory in WITHOUT running its build, so a dist/ path here resolves only on a machine where someone ran `npm run build` by hand. When the package directory was deleted and restored from git, dist/ (gitignored build output) did not come back and every consumer broke with `Can't resolve '@aitherium/bead-space'`. npm swaps publishConfig in at publish time, so the published package is unchanged.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
@@ -56,8 +56,8 @@
       ],
       "./bead-space.css": "./dist/bead-space.css"
     },
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node -e \"const fs=require('fs'); fs.copyFileSync('src/bead-space.css', 'dist/bead-space.css')\"",

@@ -1,4 +1,4 @@
-# @aitheros/bead-space
+# @aitherium/bead-space
 
 An embeddable force-graph **universe**. Nodes are planets, dependencies are flight paths, and
 whoever is actively working a node gets a ship orbiting it.
@@ -39,8 +39,8 @@ expensive part, so it must not run every frame.
 ### Vanilla
 
 ```ts
-import { createBeadSpace } from '@aitheros/bead-space';
-import '@aitheros/bead-space/bead-space.css';
+import { createBeadSpace } from '@aitherium/bead-space';
+import '@aitherium/bead-space/bead-space.css';
 
 const universe = createBeadSpace(containerEl, { nodes, links }, {
   assetRoot: '/assets/kenney-simple-space',
@@ -55,8 +55,8 @@ universe.destroy();          // cancels the rAF loop, the sim and the ResizeObse
 ### React
 
 ```tsx
-import { BeadSpace, useBeadData } from '@aitheros/bead-space/react';
-import '@aitheros/bead-space/bead-space.css';
+import { BeadSpace, useBeadData } from '@aitherium/bead-space/react';
+import '@aitherium/bead-space/bead-space.css';
 
 const { data } = useBeadData('/api/work-graph', { intervalMs: 15_000 });
 return <BeadSpace data={data} style={{ height: '100%' }} onSelect={openTask} />;
