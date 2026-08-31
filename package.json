@@ -21,11 +21,11 @@
       "import": "./src/adapters/index.ts"
     },
     "./adapters/*": [
-      "./dist/adapters/*.d.ts",
-      "./dist/adapters/*.js",
-      "./dist/adapters/*"
+      "./src/adapters/*.ts",
+      "./src/adapters/*.tsx",
+      "./src/adapters/*"
     ],
-    "./bead-space.css": "./dist/bead-space.css"
+    "./bead-space.css": "./src/bead-space.css"
   },
   "files": [
     "dist/",
