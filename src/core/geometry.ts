@@ -291,7 +291,7 @@ export function createGeometry(deps: GeometryDeps): Geometry {
         duration: orbitDuration + flightDuration,
       };
     });
-    const cycleDuration = sum(legs, (leg) => leg.duration);
+    const cycleDuration = sum(legs, (leg: { duration: number }) => leg.duration);
     let elapsed = (now + worker.phase) % cycleDuration;
     let leg = legs[0];
     for (const candidate of legs) {

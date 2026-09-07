@@ -56,8 +56,8 @@
       ],
       "./bead-space.css": "./dist/bead-space.css"
     },
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node -e \"const fs=require('fs'); fs.copyFileSync('src/bead-space.css', 'dist/bead-space.css')\"",
