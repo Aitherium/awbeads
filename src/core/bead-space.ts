@@ -396,7 +396,18 @@ export function createBeadSpace(
   }
 
   // ── camera ────────────────────────────────────────────────────────────────────
+  // 🚨 `.extent()` is LOAD-BEARING, not a nicety. Without it d3-zoom falls back to
+  // `defaultExtent`, which reads `svg.viewBox.baseVal` / `svg.width.baseVal` off the
+  // node zoom.transform targets. Measured 2026-09-11 on aitherium.com: in Chromium
+  // builds where that read yields undefined, the FIRST `svg.call(zoom.transform,
+  // homeTransform)` below throws `TypeError: Cannot read properties of undefined
+  // (reading 'baseVal')` from inside d3-zoom — during the Living OS boot, so the
+  // whole (os) route hit the error boundary and a guest saw "Aitherium hit a snag
+  // booting up" before any tile rendered (caught by the stack-aware console hook;
+  // the boundary logs the Error object, which JSON-serialises to {}).
+  // The explicit form never touches the DOM, so the fallback is unreachable.
   const zoom: ZoomBehavior<SVGSVGElement, unknown> = d3zoom<SVGSVGElement, unknown>()
+    .extent((): [[number, number], [number, number]] => [[0, 0], [width, height]])
     .scaleExtent([0.3, 5])
     .on('zoom', (event) => {
       stage.attr('transform', event.transform.toString());
