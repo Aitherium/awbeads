@@ -71,3 +71,14 @@ export {
   type EcosystemBrickRecord,
   type EcosystemOptions,
 } from './ecosystem';
+
+export {
+  fromPipelineUniverse,
+  PIPELINE_CLUSTER_ORDER,
+  PIPELINE_SCHEMA,
+  type PipelineUniverseRecord,
+  type PipelineUniverseOptions,
+  type PipelineTaskRecord,
+  type TrainingRunEventRecord,
+  type CheckpointRecord,
+} from './pipeline';

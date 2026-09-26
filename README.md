@@ -100,6 +100,7 @@ All pure functions — feed them what an endpoint returned, get `BeadData` back.
 | `fromScopeGraph` | `GET /scope/graph/{full,unified,subproject}` | Accepts both `connections` (pydantic) and `edges` (hand-built dict) — the two endpoints disagree. Circular deps render as blockers. |
 | `fromRegistry` | AitherRegistry catalogue | `depends_on`/`requires` → hierarchy. |
 | `fromGenericGraph` | anything `{nodes, edges}` | configurable field mapping — AitherGraph, codegraph, knowledge graph. |
+| `fromPipelineUniverse` | `GET /tunnel/training/universe` (`aither.pipeline-universe/v1`, `lib/training/pipeline_universe.py`) | Training pipeline: lanes finetune/teachers/eval/data/workflows (**pass `clusterOrder: PIPELINE_CLUSTER_ORDER`**); task -> run -> checkpoint hierarchy; unmet dependency = `blocks`, met = `related`; GPU/agent = ship; a non-terminal run silent past `staleAfterMs` (default 10 min) or flagged `stale` by the server turns `blocked`. Test: `npm run test:pipeline`. Browser bundle for the tunnel: `npm run build:tunnel`. |
 | `mergeWorkGraphs` | — | namespaces ids/clusters so several sources can share one universe. |
 
 ### Colour, and the trap in it
