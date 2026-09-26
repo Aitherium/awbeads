@@ -1,0 +1,247 @@
+{
+  "schema": "aither.pipeline-universe/v1",
+  "generated_at": "2026-09-25T18:30:30+00:00",
+  "spool_dir": "",
+  "runs": [
+    {
+      "schema": "aither.training-run-event/v1",
+      "seq": 41,
+      "run_id": "orch-20260925T171000Z",
+      "kind": "finetune",
+      "state": "training",
+      "step": 420,
+      "total_steps": 1200,
+      "loss": 0.8123,
+      "gpu": "gpu_1x_h100_sxm5",
+      "eta_s": 5400,
+      "started_at": "2026-09-25T17:10:00+00:00",
+      "state_since": "2026-09-25T17:40:00+00:00",
+      "updated_at": "2026-09-25T18:30:00+00:00",
+      "host": "desktop",
+      "source": "lambda_train",
+      "eval": {
+        "step": 400,
+        "tag": "ckpt-400",
+        "base_antidegen": 0.61,
+        "tuned_antidegen": 0.66,
+        "delta": 0.05,
+        "n": 40
+      },
+      "meta": {
+        "checkpoints": [
+          {
+            "step": 200,
+            "tag": "ckpt-200",
+            "delta": -0.02,
+            "at": "2026-09-25T18:00:00+00:00"
+          },
+          {
+            "step": 400,
+            "tag": "ckpt-400",
+            "delta": 0.05,
+            "at": "2026-09-25T18:25:00+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "aither.training-run-event/v1",
+      "seq": 12,
+      "run_id": "orch-20260925T162000Z",
+      "kind": "finetune",
+      "state": "failed",
+      "step": 35,
+      "total_steps": 1200,
+      "gpu": "gpu_1x_h100_sxm5",
+      "started_at": "2026-09-25T16:20:00+00:00",
+      "state_since": "2026-09-25T16:55:00+00:00",
+      "updated_at": "2026-09-25T16:55:00+00:00",
+      "host": "desktop",
+      "source": "lambda_train"
+    },
+    {
+      "schema": "aither.training-run-event/v1",
+      "seq": 3,
+      "run_id": "teacher-bonsai2-r1",
+      "kind": "teacher_rollout",
+      "state": "running",
+      "step": 90,
+      "total_steps": 300,
+      "gpu": "rtx5090",
+      "started_at": "2026-09-25T18:00:00+00:00",
+      "state_since": "2026-09-25T18:01:00+00:00",
+      "updated_at": "2026-09-25T18:29:00+00:00",
+      "host": "desktop",
+      "source": "teacher"
+    },
+    {
+      "schema": "aither.training-run-event/v1",
+      "seq": 7,
+      "run_id": "kaggle-download-bulk",
+      "kind": "download",
+      "state": "completed",
+      "started_at": "2026-09-25T15:00:00+00:00",
+      "state_since": "2026-09-25T15:40:00+00:00",
+      "updated_at": "2026-09-25T15:40:00+00:00",
+      "host": "desktop",
+      "source": "kaggle"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "comp-download",
+      "title": "Kaggle comp bulk download",
+      "lane": "data",
+      "run_ids": [
+        "kaggle-download-bulk"
+      ],
+      "status_source": "telemetry",
+      "meta": {}
+    },
+    {
+      "id": "taskpool",
+      "title": "Task pool select + image check",
+      "lane": "data",
+      "blocked_by": [
+        "comp-download"
+      ],
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {
+        "done_if": "taskpool/out"
+      }
+    },
+    {
+      "id": "synth",
+      "title": "Synthesized tasks (mutations)",
+      "lane": "data",
+      "blocked_by": [
+        "taskpool"
+      ],
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {
+        "done_if": "synth/out"
+      }
+    },
+    {
+      "id": "coder-corpus",
+      "title": "coder_corpus (open SWE trajectories)",
+      "lane": "data",
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {
+        "done_if": "data/out"
+      }
+    },
+    {
+      "id": "teacher-bonsai2",
+      "title": "Teacher: Bonsai-2",
+      "lane": "teachers",
+      "blocked_by": [
+        "synth"
+      ],
+      "run_ids": [
+        "teacher-bonsai2-r1"
+      ],
+      "status_source": "telemetry",
+      "meta": {}
+    },
+    {
+      "id": "teacher-orchestrator-v19",
+      "title": "Teacher: orchestrator v19",
+      "lane": "teachers",
+      "blocked_by": [
+        "synth"
+      ],
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {}
+    },
+    {
+      "id": "teacher-gemma4",
+      "title": "Teacher: gemma4",
+      "lane": "teachers",
+      "blocked_by": [
+        "synth"
+      ],
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {}
+    },
+    {
+      "id": "trajectories",
+      "title": "Teacher trajectories -> SFT rows",
+      "lane": "data",
+      "blocked_by": [
+        "teacher-bonsai2",
+        "teacher-orchestrator-v19",
+        "teacher-gemma4"
+      ],
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {}
+    },
+    {
+      "id": "coder-lora-v1",
+      "title": "gemma-4-31B coder_corpus LoRA v1 (Lambda)",
+      "lane": "finetune",
+      "blocked_by": [
+        "coder-corpus"
+      ],
+      "run_ids": [
+        "orch-20260925T171000Z",
+        "orch-20260925T162000Z"
+      ],
+      "status_source": "telemetry",
+      "meta": {}
+    },
+    {
+      "id": "tool-lora",
+      "title": "tool_lora training",
+      "lane": "finetune",
+      "blocked_by": [
+        "trajectories",
+        "coder-lora-v1"
+      ],
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {}
+    },
+    {
+      "id": "replica-eval",
+      "title": "Replica grader eval",
+      "lane": "eval",
+      "blocked_by": [
+        "tool-lora"
+      ],
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {}
+    },
+    {
+      "id": "submission",
+      "title": "Kaggle submission build",
+      "lane": "workflows",
+      "blocked_by": [
+        "replica-eval"
+      ],
+      "run_ids": [],
+      "status_source": "unknown",
+      "meta": {
+        "done_if": "submission/submission.zip"
+      }
+    },
+    {
+      "id": "wf-kaggle-agent",
+      "title": "Claude Code workflow: build Kaggle agent",
+      "lane": "workflows",
+      "status": "running",
+      "agent": "claude-code",
+      "created_at": "2026-09-25T17:30:00+00:00",
+      "run_ids": [],
+      "meta": {}
+    }
+  ],
+  "errors": []
+}
