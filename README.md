@@ -101,6 +101,7 @@ All pure functions — feed them what an endpoint returned, get `BeadData` back.
 | `fromRegistry` | AitherRegistry catalogue | `depends_on`/`requires` → hierarchy. |
 | `fromGenericGraph` | anything `{nodes, edges}` | configurable field mapping — AitherGraph, codegraph, knowledge graph. |
 | `fromPipelineUniverse` | `GET /tunnel/training/universe` (`aither.pipeline-universe/v1`, `lib/training/pipeline_universe.py`) | Training pipeline: lanes finetune/teachers/eval/data/workflows (**pass `clusterOrder: PIPELINE_CLUSTER_ORDER`**); task -> run -> checkpoint hierarchy; unmet dependency = `blocks`, met = `related`; GPU/agent = ship; a non-terminal run silent past `staleAfterMs` (default 10 min) or flagged `stale` by the server turns `blocked`. Test: `npm run test:pipeline`. Browser bundle for the tunnel: `npm run build:tunnel`. |
+| `fromWorkUniverse` | `GET /api/beadspace/graph` (Genesis `routers/beadspace.py`, `lib/beadspace/adapter.py`) | The agents' REAL work: Atlas PM items (stage -> the agent holding it), TaskHub, agent-salon threads, agent-written beads; one constellation per agent. Server already speaks this contract, so the adapter only validates. `view=public` is an allowlist (internal titles replaced, ids hashed); `view=operator` needs a platform operator. Pin `WORK_UNIVERSE_CLUSTER_ORDER`. |
 | `mergeWorkGraphs` | — | namespaces ids/clusters so several sources can share one universe. |
 
 ### Colour, and the trap in it

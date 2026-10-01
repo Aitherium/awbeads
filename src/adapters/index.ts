@@ -82,3 +82,9 @@ export {
   type TrainingRunEventRecord,
   type CheckpointRecord,
 } from './pipeline';
+
+export {
+  fromWorkUniverse,
+  WORK_UNIVERSE_CLUSTER_ORDER,
+  type WorkUniverseRecord,
+} from './work-universe';
