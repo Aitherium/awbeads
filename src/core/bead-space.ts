@@ -113,6 +113,24 @@ function deriveClusterAnchors(names: string[]): Record<string, [number, number]>
   return anchors;
 }
 
+/**
+ * Which input may drive the camera. A plain mouse wheel over the universe must
+ * SCROLL THE PAGE: the graph sits inside long pages (Studio home, Spaces), and
+ * d3-zoom's default swallowed every wheel, so the page could not be scrolled past it
+ * (owner 2026-10-01: "scrolling ... is totally broken"). Zoom on a wheel needs
+ * Ctrl/Cmd (a trackpad pinch arrives as a wheel with ctrlKey). Drag and touch keep
+ * d3's default rule: primary button only, no Ctrl-drag.
+ */
+export function zoomGestureAllowed(event: {
+  type: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  button?: number;
+}): boolean {
+  if (event.type === 'wheel') return Boolean(event.ctrlKey || event.metaKey);
+  return !event.ctrlKey && !event.button;
+}
+
 export function createBeadSpace(
   container: HTMLElement,
   data: BeadData,
@@ -409,6 +427,7 @@ export function createBeadSpace(
   const zoom: ZoomBehavior<SVGSVGElement, unknown> = d3zoom<SVGSVGElement, unknown>()
     .extent((): [[number, number], [number, number]] => [[0, 0], [width, height]])
     .scaleExtent([0.3, 5])
+    .filter(zoomGestureAllowed)
     .on('zoom', (event) => {
       stage.attr('transform', event.transform.toString());
       // Zooming in is the "tell me what these are" gesture — honour it.
