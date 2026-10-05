@@ -890,36 +890,62 @@ export function createBeadSpace(
         .iterations(2),
     )
     .force('cluster-age', clusterRadialForce())
-    .on('tick', () => {
-      linkSelection
-        .attr('x1', (link) => (link.source as SimNode).x)
-        .attr('y1', (link) => (link.source as SimNode).y)
-        .attr('x2', (link) => (link.target as SimNode).x)
-        .attr('y2', (link) => (link.target as SimNode).y);
-      nodeSelection.attr('transform', (node) => `translate(${node.x} ${node.y})`);
-      orbitSelection.attr(
-        'transform',
-        (worker) => `translate(${worker.targets[0].x} ${worker.targets[0].y})`,
-      );
-      stationSelection.attr('transform', (node) => `translate(${node.x} ${node.y})`);
-      routeSelection.attr('d', (worker) => geometry.patrolRoutePath(worker));
-      if (!motionAllowed) {
-        patrolSelection.attr('transform', (worker) => {
-          const [x, y] = geometry.patrolWaypoints(worker)[0];
-          return `translate(${x} ${y})`;
-        });
-      }
-      // Keep the universe framed WHILE it settles, not just at the end. A big graph expands
-      // for several seconds; waiting for 'end' leaves the user staring at a cropped blob,
-      // and on a large dataset 'end' may be many seconds away.
-      // O(n) over the nodes — negligible next to the force step, and doing it continuously
-      // is what actually keeps a still-expanding layout inside the viewport.
-      tickCount += 1;
-      if (autoFit() && tickCount % 5 === 0) fitToContent(false);
-    })
+    .on('tick', renderTick)
     .on('end', () => {
       if (autoFit()) fitToContent();
     });
+
+  function renderTick(): void {
+    linkSelection
+      .attr('x1', (link) => (link.source as SimNode).x)
+      .attr('y1', (link) => (link.source as SimNode).y)
+      .attr('x2', (link) => (link.target as SimNode).x)
+      .attr('y2', (link) => (link.target as SimNode).y);
+    nodeSelection.attr('transform', (node) => `translate(${node.x} ${node.y})`);
+    orbitSelection.attr(
+      'transform',
+      (worker) => `translate(${worker.targets[0].x} ${worker.targets[0].y})`,
+    );
+    stationSelection.attr('transform', (node) => `translate(${node.x} ${node.y})`);
+    routeSelection.attr('d', (worker) => geometry.patrolRoutePath(worker));
+    if (!motionAllowed) {
+      patrolSelection.attr('transform', (worker) => {
+        const [x, y] = geometry.patrolWaypoints(worker)[0];
+        return `translate(${x} ${y})`;
+      });
+    }
+    // Keep the universe framed WHILE it settles, not just at the end. A big graph expands
+    // for several seconds; waiting for 'end' leaves the user staring at a cropped blob,
+    // and on a large dataset 'end' may be many seconds away.
+    // O(n) over the nodes — negligible next to the force step, and doing it continuously
+    // is what actually keeps a still-expanding layout inside the viewport.
+    tickCount += 1;
+    if (autoFit() && tickCount % 5 === 0) fitToContent(false);
+  }
+
+  /*
+   * Re-heat the layout. While paused only the alpha is set: a restart would spin the
+   * simulation's own timer behind a covered backdrop, and resume restarts it from that
+   * alpha. The one exception is the FIRST layout of a universe created paused — it would
+   * otherwise sit in d3's initial spiral until resumed — so it settles synchronously
+   * (a few hundred ticks over ~60 nodes is milliseconds) and paints once.
+   */
+  function heat(alpha: number, isFirst = false): void {
+    simulation.alpha(alpha);
+    if (!paused) {
+      simulation.restart();
+      return;
+    }
+    simulation.stop();
+    if (!isFirst) return;
+    const ticks = Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay()));
+    simulation.tick(ticks);
+    renderTick();
+    if (autoFit()) fitToContent(false);
+    // One frame of ships so they sit on their routes, not at the origin; animateShips
+    // does not re-arm itself while paused.
+    if (motionAllowed) animateShips(performance.now());
+  }
 
   // ── data ingest ───────────────────────────────────────────────────────────────
   // Signature of the CURRENT node/link topology. A poll that returns the same
@@ -988,7 +1014,7 @@ export function createBeadSpace(
       nextLinks.map((link) => `${link.source}>${link.target}`).sort().join('|');
     const topologyChanged = isFirst || nextSignature !== topologySignature;
     topologySignature = nextSignature;
-    if (topologyChanged) simulation.alpha(isFirst ? 1 : 0.15).restart();
+    if (topologyChanged) heat(isFirst ? 1 : 0.15, isFirst);
     options.onStats?.(computeStats());
     if (!topologyChanged) return;
 
@@ -1062,7 +1088,45 @@ export function createBeadSpace(
       if (followedOwner === worker.owner) followCamera(pose.x, pose.y);
     });
 
-    frame = window.requestAnimationFrame(animateShips);
+    frame = paused ? null : window.requestAnimationFrame(animateShips);
+  }
+
+  // ── pause / resume ───────────────────────────────────────────────────────────
+  // The loop above repaints every route, orbit and trail every frame. A host that shows the
+  // universe only as a dimmed backdrop behind windows (the Living OS desktop) pays that
+  // raster cost under every scroll of every window, so it can pause the loop; a hidden
+  // tab pauses it too. `pausedByHost` and `pausedByVisibility` are tracked separately so
+  // a tab coming back to the foreground never resumes a universe the host paused.
+  let pausedByHost = Boolean(options.paused);
+  let pausedByVisibility = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+  let paused = pausedByHost || pausedByVisibility;
+  // Hosts and the stylesheet key off this: `.bs-paused` drops the glow filters, so a
+  // frozen frame under a window is not re-filtered on every repaint above it.
+  root.classList.toggle('bs-paused', paused);
+
+  function applyPaused(): void {
+    if (destroyed) return;
+    const next = pausedByHost || pausedByVisibility;
+    if (next === paused) return;
+    paused = next;
+    root.classList.toggle('bs-paused', paused);
+    if (paused) {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = null;
+      simulation.stop();
+    } else {
+      // Picks up any heat a paused ingest/resize left behind (heat() sets alpha only).
+      if (simulation.alpha() > simulation.alphaMin()) simulation.restart();
+      if (motionAllowed && frame === null) frame = window.requestAnimationFrame(animateShips);
+    }
+  }
+
+  function onVisibilityChange(): void {
+    pausedByVisibility = document.visibilityState === 'hidden';
+    applyPaused();
+  }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
   }
 
   // ── wiring ────────────────────────────────────────────────────────────────────
@@ -1098,7 +1162,7 @@ export function createBeadSpace(
   svg.call(zoom);
   svg.call(zoom.transform, homeTransform);
   ingest(data, true);
-  if (motionAllowed) frame = window.requestAnimationFrame(animateShips);
+  if (motionAllowed && !paused) frame = window.requestAnimationFrame(animateShips);
 
   // Debounced: the OS desktop animates window/stage transitions (~500ms of
   // continuous container resizes), and reacting to every frame re-heated the
@@ -1133,7 +1197,7 @@ export function createBeadSpace(
     if (delta < 48) return;
     assignAgeRadii();
     // Let the cluster force re-settle into the new box rather than teleporting nodes.
-    simulation.alpha(Math.max(simulation.alpha(), 0.3)).restart();
+    heat(Math.max(simulation.alpha(), 0.3));
     if (!followedOwner) svg.call(zoom.transform, homeTransform);
   }
 
@@ -1173,9 +1237,16 @@ export function createBeadSpace(
       })),
     resize: handleResize,
     stats: computeStats,
+    setPaused(next: boolean) {
+      pausedByHost = next;
+      applyPaused();
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
       if (frame !== null) window.cancelAnimationFrame(frame);
       frame = null;
       for (const timer of fitTimers) window.clearTimeout(timer);

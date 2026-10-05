@@ -65,7 +65,7 @@
     "demo:data": "python demo/build-data.py",
     "demo:build": "esbuild demo/main.ts --bundle --format=esm --outfile=demo/bundle.js",
     "demo": "npm run demo:data && npm run demo:build && python -m http.server 8099 --bind 127.0.0.1",
-    "test": "esbuild test/wheel.ts --bundle --platform=node --format=esm --outfile=test/wheel.mjs --external:jsdom && node test/wheel.mjs && esbuild test/ecosystem.ts --bundle --platform=node --format=esm --outfile=test/ecosystem.mjs --external:jsdom && node test/ecosystem.mjs && npm run test:pipeline && esbuild test/smoke.ts --bundle --platform=node --format=esm --outfile=test/smoke.mjs --external:jsdom && node test/smoke.mjs",
+    "test": "esbuild test/pause.ts --bundle --platform=node --format=esm --outfile=test/pause.mjs --external:jsdom && node test/pause.mjs && esbuild test/wheel.ts --bundle --platform=node --format=esm --outfile=test/wheel.mjs --external:jsdom && node test/wheel.mjs && esbuild test/ecosystem.ts --bundle --platform=node --format=esm --outfile=test/ecosystem.mjs --external:jsdom && node test/ecosystem.mjs && npm run test:pipeline && esbuild test/smoke.ts --bundle --platform=node --format=esm --outfile=test/smoke.mjs --external:jsdom && node test/smoke.mjs",
     "check": "npm run typecheck && npm run test",
     "test:pipeline": "esbuild test/pipeline.ts --bundle --platform=node --format=esm --outfile=test/pipeline.mjs --external:jsdom && node test/pipeline.mjs",
     "build:browser": "esbuild src/browser.ts --bundle --format=iife --global-name=BeadSpace --minify --target=es2019 --outfile=dist/bead-space.iife.js",

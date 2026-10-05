@@ -316,6 +316,37 @@
   }
 }
 
+/*
+ * Cheap modes. A paused universe (`.bs-paused`, toggled by the engine) is a frozen frame,
+ * usually covered by other UI; a host may also ask for `.bs-lowfx` (on the root or any
+ * ancestor) when the universe is only an ambient backdrop. Either way the GLOW filters go:
+ * every drop-shadow / feGaussianBlur is re-rasterised on every repaint above it, and a live
+ * profile counted ~390 filtered elements behind the Living OS desktop. Planet TINT filters
+ * (on `.bs-planet-sprite`) stay — they are the planet's colour, not decoration.
+ * `filter: none` beats the per-instance `filter="url(#…)"` presentation attributes.
+ */
+.bead-space.bs-paused .bs-node,
+.bead-space.bs-paused .bs-station,
+.bead-space.bs-paused .bs-selection-ring,
+.bead-space.bs-paused .bs-ship-tail,
+.bead-space.bs-paused .bs-patrol-trail,
+.bs-lowfx .bead-space .bs-node,
+.bs-lowfx .bead-space .bs-station,
+.bs-lowfx .bead-space .bs-selection-ring,
+.bs-lowfx .bead-space .bs-ship-tail,
+.bs-lowfx .bead-space .bs-patrol-trail,
+.bead-space.bs-lowfx .bs-node,
+.bead-space.bs-lowfx .bs-station,
+.bead-space.bs-lowfx .bs-selection-ring,
+.bead-space.bs-lowfx .bs-ship-tail,
+.bead-space.bs-lowfx .bs-patrol-trail {
+  filter: none;
+}
+
+.bead-space.bs-paused .bs-follow-pulse {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bead-space .bs-follow-pulse {
     animation: none;

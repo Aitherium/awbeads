@@ -112,6 +112,11 @@ export interface BeadSpaceOptions {
    * When motion is off, ships are pinned at their first waypoint (still legible, no rAF loop).
    */
   reducedMotion?: boolean;
+  /**
+   * Start with the ship animation loop paused (see `BeadSpaceHandle.setPaused`). The loop
+   * also pauses on its own while the document is hidden.
+   */
+  paused?: boolean;
   /** Fired when a planet is selected (click / Enter / Space), or `null` on reset. */
   onSelect?: (node: BeadNode | null) => void;
   /** Fired when a ship is followed by the camera, or `null` when following stops. */
@@ -136,6 +141,11 @@ export interface BeadSpaceHandle {
   /** Re-measure the container. Called automatically by a ResizeObserver. */
   resize(): void;
   stats(): BeadStats;
+  /**
+   * Pause or resume the rAF loop and the force simulation. A paused universe keeps its
+   * last frame on screen and costs nothing per frame. Resuming honours reduced motion.
+   */
+  setPaused(paused: boolean): void;
   /** Tear down the rAF loop, the simulation, the observer and all DOM. */
   destroy(): void;
 }
