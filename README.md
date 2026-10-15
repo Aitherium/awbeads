@@ -133,6 +133,51 @@ distance is the layout's strongest encoding. Those adapters project a numeric me
 layer, lines of code, size — onto a synthetic `createdAt`, flagged as
 `meta.syntheticCreatedAt: true`. **Never surface those as real dates.**
 
+## The universe (0.2.0): explore, don't menu
+
+Two new entries sit beside the 2D engine and change nothing about it (`src/index.ts`
+does not re-export them, so a consumer of `.` pulls no React and no three):
+
+| entry | what | needs |
+|---|---|---|
+| `@aitherium/bead-space/universe` | the pure model: levels, deterministic layout, the shared selection reducer, search, verbs, card attachment | nothing (no DOM, no React) |
+| `@aitherium/bead-space/space` | `SpaceSwitch` (3D ↔ 2D), `Space3D`, `Space2D`, `SelectionPanel`, the HUD | React 19, optional peers `three` + `@react-three/fiber` (no drei) |
+
+**Contract U1.** A universe is `BeadData` plus `level` (universe → galaxy → solar → system →
+moon), `parent`, `health` (`ok|degraded|down|starting|parked|unknown`, where unknown is drawn
+hollow and never green), `verbs[]` and `explore[]` per node, and `rel` per link
+(`depends|hosts|serves|traffic|routes`). Decision cards are attached client-side by
+`attachCards(data, cards, order)`: `subjectOf` tries the card's explicit `subject`, then
+credential → `secret:<name>`, the dedupe-key / recipe prefix table, a known agent, a service
+named in the text (whole word, longest first), the session, the cwd, the host, and finally
+`platform`. A subject with no node gets a virtual moon under the right parent. Card text never
+leaves the client.
+
+**Layout is deterministic, not simulated.** Galaxies sit on a Fibonacci sphere around the
+root; every other parent's children on a tilted ring whose radius grows with sqrt of the child
+count quantised to the next power of two. A child's angle comes from `hash(id)` alone, so a new
+sibling moves nobody else unless the count crosses 4, 8, 16, … (tested: 300 nodes in < 5 ms).
+
+**One obvious action.** The selection panel shows at most five blocks: name + one state
+sentence; the top ask (recommended option as the big button, ≤ 2 ghost chips, the rest behind
+`other…`; a credential ask is an uncontrolled masked field whose value goes to `onCredential`
+once and is cleared, and only `{ok: true}` reads as `stored · card closed`); the primary verb
+plus ≤ 2 more (a `confirm` verb arms on the first click and sends `confirmed: true` on a second
+within 6 s); `Explore with Aither`; an impact line. The package executes nothing; every action
+is a host callback returning a promise.
+
+**3D budget.** `frameloop="demand"`: one instanced icosahedron mesh (Fresnel rim) plus one
+wireframe instanced mesh for unknown health, one line set per link style, additive point
+sprites for atmospheres, beacons, matches, comets and the ship. A 30 fps timer runs only while
+a beacon, comet or ship is moving; `prefers-reduced-motion` stops all of it and turns camera
+flights into cuts. No WebGL, or under 30 fps for 3 s, fires `onFallback` and the host shows the
+dependency-free SVG view. Keys: arrows step siblings, Enter descends, Esc/Backspace ascends,
+`/` searches, Space flies to the next ask, V toggles 3D/2D.
+
+**Vendored into the desk.** `AitherOS/dev/tools/vendor_bead_space.py` copies `types.ts`,
+`core/hash.ts`, `universe/` and `space/` into the awdesk source tree with a GENERATED header;
+`--check` fails on drift. Edit here and re-run it, never the copy.
+
 ## Verify
 
 ```bash

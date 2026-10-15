@@ -1,6 +1,6 @@
 {
   "name": "@aitherium/bead-space",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "description": "Embeddable force-graph universe — nodes as planets, dependencies as flight paths, active owners as orbiting/patrolling ships. Framework-agnostic core + React wrapper + AitherOS data adapters.",
   "type": "module",
@@ -25,6 +25,14 @@
       "./src/adapters/*.tsx",
       "./src/adapters/*"
     ],
+    "./universe": {
+      "types": "./src/universe/index.ts",
+      "import": "./src/universe/index.ts"
+    },
+    "./space": {
+      "types": "./src/space/index.ts",
+      "import": "./src/space/index.ts"
+    },
     "./bead-space.css": "./src/bead-space.css"
   },
   "files": [
@@ -54,6 +62,14 @@
         "./dist/adapters/*.js",
         "./dist/adapters/*"
       ],
+      "./universe": {
+        "types": "./dist/universe/index.d.ts",
+        "import": "./dist/universe/index.js"
+      },
+      "./space": {
+        "types": "./dist/space/index.d.ts",
+        "import": "./dist/space/index.js"
+      },
       "./bead-space.css": "./dist/bead-space.css"
     },
     "registry": "https://registry.npmjs.org",
@@ -65,22 +81,31 @@
     "demo:data": "python demo/build-data.py",
     "demo:build": "esbuild demo/main.ts --bundle --format=esm --outfile=demo/bundle.js",
     "demo": "npm run demo:data && npm run demo:build && python -m http.server 8099 --bind 127.0.0.1",
-    "test": "esbuild test/pause.ts --bundle --platform=node --format=esm --outfile=test/pause.mjs --external:jsdom && node test/pause.mjs && esbuild test/wheel.ts --bundle --platform=node --format=esm --outfile=test/wheel.mjs --external:jsdom && node test/wheel.mjs && esbuild test/ecosystem.ts --bundle --platform=node --format=esm --outfile=test/ecosystem.mjs --external:jsdom && node test/ecosystem.mjs && npm run test:pipeline && esbuild test/smoke.ts --bundle --platform=node --format=esm --outfile=test/smoke.mjs --external:jsdom && node test/smoke.mjs",
+    "test": "esbuild test/pause.ts --bundle --platform=node --format=esm --outfile=test/pause.mjs --external:jsdom && node test/pause.mjs && esbuild test/wheel.ts --bundle --platform=node --format=esm --outfile=test/wheel.mjs --external:jsdom && node test/wheel.mjs && esbuild test/ecosystem.ts --bundle --platform=node --format=esm --outfile=test/ecosystem.mjs --external:jsdom && node test/ecosystem.mjs && npm run test:pipeline && esbuild test/smoke.ts --bundle --platform=node --format=esm --outfile=test/smoke.mjs --external:jsdom && node test/smoke.mjs && npm run test:universe",
     "check": "npm run typecheck && npm run test",
     "test:pipeline": "esbuild test/pipeline.ts --bundle --platform=node --format=esm --outfile=test/pipeline.mjs --external:jsdom && node test/pipeline.mjs",
     "build:browser": "esbuild src/browser.ts --bundle --format=iife --global-name=BeadSpace --minify --target=es2019 --outfile=dist/bead-space.iife.js",
     "build:tunnel": "npm run build:browser && node -e \"const fs=require('fs'),d='../../../services/mesh/static/bead-space';fs.mkdirSync(d,{recursive:true});fs.copyFileSync('dist/bead-space.iife.js',d+'/bead-space.iife.js');fs.copyFileSync('src/bead-space.css',d+'/bead-space.css')\"",
-    "test:ecosystem": "esbuild test/ecosystem.ts --bundle --platform=node --format=esm --outfile=test/ecosystem.mjs --external:jsdom && node test/ecosystem.mjs"
+    "test:ecosystem": "esbuild test/ecosystem.ts --bundle --platform=node --format=esm --outfile=test/ecosystem.mjs --external:jsdom && node test/ecosystem.mjs",
+    "test:universe": "esbuild test/universe.ts --bundle --platform=node --format=esm --outfile=test/universe.mjs --external:jsdom && node test/universe.mjs && esbuild test/space-scene.ts --bundle --platform=node --format=esm --outfile=test/space-scene.mjs --external:jsdom && node test/space-scene.mjs"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "three": ">=0.160.0",
+    "@react-three/fiber": "^9.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "three": {
+      "optional": true
+    },
+    "@react-three/fiber": {
       "optional": true
     }
   },
@@ -94,6 +119,7 @@
     "d3-zoom": "^3.0.0"
   },
   "devDependencies": {
+    "@react-three/fiber": "^9.4.2",
     "@types/d3-array": "^3.2.1",
     "@types/d3-drag": "^3.0.7",
     "@types/d3-force": "^3.0.10",
@@ -102,9 +128,14 @@
     "@types/d3-transition": "^3.0.9",
     "@types/d3-zoom": "^3.0.8",
     "@types/jsdom": "^28.0.3",
-    "@types/react": "^18.3.18",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.182.0",
     "esbuild": "^0.25.0",
     "jsdom": "^29.1.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.182.0",
     "typescript": "^5.8.2"
   },
   "license": "UNLICENSED"

@@ -185,3 +185,115 @@ export type CubicSegment = [
   [number, number],
   [number, number],
 ];
+
+// ── Universe contract (U1) ───────────────────────────────────────────────────
+//
+// ADD-ONLY. A universe is a BeadData whose nodes also carry a level, a parent and a
+// health, so one graph can be explored as universe → galaxy → solar → system → moon.
+// Consumed by `./universe` (pure) and `./space` (React). Nothing above changed.
+
+/** Depth in the universe tree. */
+export type BeadLevel = 'universe' | 'galaxy' | 'solar' | 'system' | 'moon';
+
+/** Observed health. `unknown` is NOT healthy: it renders hollow, never green. */
+export type BeadHealthState = 'ok' | 'degraded' | 'down' | 'starting' | 'parked' | 'unknown';
+
+export interface BeadHealth {
+  state: BeadHealthState;
+  /** Why this state, as a short plain phrase. */
+  reason?: string;
+  /** Which source reported it. */
+  source?: string;
+  /** ISO timestamp of the observation. */
+  at?: string;
+  /** Children's states summed, on a node that aggregates others. */
+  rollup?: { ok: number; degraded: number; down: number; starting: number; unknown: number };
+}
+
+/** Something the host can do to a node. The package itself executes nothing. */
+export interface BeadVerb {
+  id: string;
+  label: string;
+  /** `confirm` = destructive: it arms on the first click and runs on a second within 6 s. */
+  danger: 'none' | 'confirm';
+  /** `fleet` runs through the host's action table; `open` opens a surface. */
+  transport: 'fleet' | 'open';
+  primary?: boolean;
+}
+
+/** An "explore with my agent" prompt scoped to one node. The first is THE button. */
+export interface BeadExplore {
+  label: string;
+  prompt: string;
+}
+
+export interface BeadAskOption {
+  key: string;
+  label: string;
+  recommended: boolean;
+}
+
+/** A decision card attached to the object it concerns. Attached client-side. */
+export interface BeadAsk {
+  cardId: string;
+  title: string;
+  urgency: string;
+  credential: boolean;
+  secretName?: string;
+  options: BeadAskOption[];
+  /** `explicit` (the card named its subject) or `heuristic:<rule>`. */
+  how: string;
+  /** Position in the host's ranked card order; lower is more important. */
+  rank?: number;
+}
+
+export interface UniverseNode extends BeadNode {
+  level: BeadLevel;
+  parent: string | null;
+  health: BeadHealth;
+  verbs?: BeadVerb[];
+  explore?: BeadExplore[];
+  asks?: BeadAsk[];
+  /** Created client-side to hold an ask whose subject had no node. */
+  virtual?: boolean;
+}
+
+export type UniverseRel = 'depends' | 'hosts' | 'serves' | 'traffic' | 'routes';
+
+export interface UniverseLink extends BeadLink {
+  rel: UniverseRel;
+  weight?: number;
+}
+
+export interface UniverseData {
+  universe_version: number;
+  generated_at: string;
+  etag: string;
+  nodes: UniverseNode[];
+  links: UniverseLink[];
+  meta: {
+    sources?: Record<string, string>;
+    counts?: Record<string, number>;
+    ttl_s?: number;
+    [key: string]: unknown;
+  };
+}
+
+/** One open decision card as the desk normalises it (its `cardFromRaw` shape). */
+export interface DeskCard {
+  id: string;
+  title: string;
+  summary: string;
+  kind: string;
+  urgency: string;
+  subject?: string;
+  secretName?: string;
+  recipe?: string;
+  dedupeKey?: string;
+  agent?: string;
+  sessionId?: string;
+  cwd?: string;
+  host?: string;
+  options: Array<{ key: string; label: string; recommended?: boolean; consequence?: string }>;
+  blocking: boolean;
+}
