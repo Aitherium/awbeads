@@ -25,6 +25,8 @@ export interface Space2DProps {
   dispatch: (action: SelectionAction) => void;
   glow: AskGlow;
   matchIds?: ReadonlySet<string>;
+  /** The profile lens: drawn dim, status untouched. */
+  dimIds?: ReadonlySet<string>;
   reducedMotion?: boolean;
   /** The selection panel's wrapper; positioned beside the selected node. */
   anchorRef?: RefObject<HTMLDivElement | null>;
@@ -37,7 +39,7 @@ function radiusFor(childCount: number, isFocus: boolean): number {
   return 9 + 3 * Math.sqrt(childCount);
 }
 
-export function Space2D({ data, visible, state, dispatch, glow, matchIds, reducedMotion, anchorRef }: Space2DProps) {
+export function Space2D({ data, visible, state, dispatch, glow, matchIds, dimIds, reducedMotion, anchorRef }: Space2DProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const wheelAccum = useRef(0);
   const xy = useMemo(() => layout2d(visible), [visible]);
@@ -168,6 +170,8 @@ export function Space2D({ data, visible, state, dispatch, glow, matchIds, reduce
             key={node.id}
             transform={`translate(${x} ${y})`}
             style={{ cursor: 'pointer' }}
+            opacity={dimIds?.has(node.id) ? 0.3 : undefined}
+            data-dim={dimIds?.has(node.id) ? 'true' : undefined}
             data-id={node.id}
             onClick={(e) => {
               e.stopPropagation();

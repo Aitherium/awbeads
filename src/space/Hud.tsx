@@ -1,6 +1,7 @@
 /**
- * The only chrome on the space: a ghost search line that appears when you type, and one
- * pill saying what needs you. No lists, no menus.
+ * The only chrome on the space: a ghost search line that appears when you type, one
+ * pill saying what needs you, and (when the host asks for it) the profile lens. No
+ * lists, no menus.
  */
 import { useEffect, useRef } from 'react';
 
@@ -8,6 +9,8 @@ import type { UniverseData } from '../types';
 import type { SearchHit } from '../universe/selection';
 import { allAsks } from '../universe/verbs';
 import { FONTS, PALETTE } from './palette';
+import { LENS_TIERS, lensOf, lensSentence } from './panel-text';
+import type { LensTier } from './panel-text';
 
 export interface SearchLineProps {
   data: UniverseData;
@@ -139,6 +142,57 @@ export function NextPill({ data, onFly, index = 0 }: NextPillProps) {
         ? `${n} thing${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} you · ${n > 1 ? `${at + 1}/${n} · ` : ''}${top.ask.title}`
         : 'Nothing needs you'}
     </button>
+  );
+}
+
+export interface ProfileLensProps {
+  data: UniverseData;
+  tier: LensTier;
+  onTier: (tier: LensTier) => void;
+}
+
+/**
+ * Bottom-left: the profile lens. Picking a tier DIMS the services outside it (their
+ * status is untouched) and sums the tier's measured RAM against the fleet's -- the view
+ * the default-profile decision is made from. It applies nothing.
+ */
+export function ProfileLens({ data, tier, onTier }: ProfileLensProps) {
+  const summary = lensOf(data, tier);
+  const tiers: LensTier[] = [...LENS_TIERS, 'none'];
+  return (
+    <div style={{ position: 'absolute', bottom: 20, left: 16, pointerEvents: 'auto' }} data-lens={tier}>
+      <div
+        role="group"
+        aria-label="Profile lens"
+        style={{ display: 'inline-flex', border: `1px solid ${PALETTE.hairline}`, borderRadius: 999, padding: 2, background: `${PALETTE.surface}CC` }}
+      >
+        {tiers.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={tier === t}
+            onClick={() => onTier(t)}
+            style={{
+              padding: '4px 10px',
+              border: 'none',
+              borderRadius: 999,
+              background: tier === t ? PALETTE.aitherium : 'transparent',
+              color: tier === t ? PALETTE.void : PALETTE.quiet,
+              fontFamily: FONTS.metric,
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      {summary ? (
+        <div style={{ marginTop: 4, fontFamily: FONTS.metric, fontSize: 11, color: PALETTE.ink }} data-lens-sum>
+          {lensSentence(summary)}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

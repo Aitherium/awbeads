@@ -41,6 +41,8 @@ export interface Space3DProps {
   state: SelectionState;
   dispatch: (action: SelectionAction) => void;
   matchIds?: ReadonlySet<string>;
+  /** The profile lens: drawn dim, status untouched. */
+  dimIds?: ReadonlySet<string>;
   reducedMotion?: boolean;
   /** A node an "Explore with Aither" turn is running on: the ship orbits it. */
   exploringId?: string | null;
@@ -905,7 +907,9 @@ export function Space3D(props: Space3DProps) {
     }
   }, [webgl]);
 
-  const inst = useMemo(() => buildInstances(visible, positions, { data, glow }), [visible, positions, data, glow]);
+  const dimIds = props.dimIds;
+  const inst = useMemo(() => buildInstances(visible, positions, { data, glow, dimIds }),
+    [visible, positions, data, glow, dimIds]);
 
   // Labels: focus, selected, hovered, every ask, then children up to the cap (asks and
   // trouble first so the cap never hides what matters).

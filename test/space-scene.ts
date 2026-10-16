@@ -11,7 +11,8 @@ import { act, createElement } from 'react';
 import { zoomGestureAllowed } from '../src/core/bead-space';
 import { spaceGestureAllowed } from '../src/space/gesture';
 import { PALETTE, healthColor, isHollow } from '../src/space/palette';
-import { askGlow, buildInstances, positions3d } from '../src/space/scene';
+import { lensOf } from '../src/space/panel-text';
+import { LENS_DIM, askGlow, buildInstances, positions3d } from '../src/space/scene';
 import { attachCards, visibleAt } from '../src/universe';
 import type { DeskCard } from '../src/types';
 import { bigUniverse, check, finish, fixture } from './universe-fixture';
@@ -45,6 +46,20 @@ const llama = gpu.ids.indexOf('model:llama');
 check('unknown health is hollow', gpu.hollow[llama] === 1);
 const fleet = buildInstances(visibleAt(data, 'galaxy:fleet')!, positions, { data, glow });
 check('dashed link for kind=related', fleet.dashedLinkPositions.length === 0 || fleet.dashedLinkPositions.length % 6 === 0);
+
+// ── profile lens (pure) ──────────────────────────────────────────────────────
+{
+  const v = visibleAt(data, 'solar:fleet/core')!;
+  const someSvc = v.nodes.find((n) => n.id.startsWith('svc:'))!;
+  const lens = lensOf(data, 'business');
+  check('lens dims every svc outside the tier (fixture has no profiles)', Boolean(lens && lens.dimIds.has(someSvc.id)));
+  check('lens none dims nothing', lensOf(data, 'none') === null);
+  const lit = buildInstances(v, positions, { data, glow });
+  const dimmed = buildInstances(v, positions, { data, glow, dimIds: new Set([someSvc.id]) });
+  const at = lit.ids.indexOf(someSvc.id);
+  check('lens dims colour, not status', Math.abs(dimmed.colors[at * 3] - lit.colors[at * 3] * LENS_DIM) < 1e-6
+    && dimmed.hollow[at] === lit.hollow[at]);
+}
 
 const big = bigUniverse(300);
 const bigInst = buildInstances(visibleAt(big, 'galaxy:fleet')!, positions3d(big), { data: big });
@@ -183,6 +198,100 @@ async function panelChecks(): Promise<void> {
   check('state line reads "Healthy · Watch online"',
     (container.querySelector('[data-state]')?.textContent ?? '') === 'Healthy · Watch online',
     container.querySelector('[data-state]')?.textContent ?? '');
+  // ── "What it is doing" + profile chips ─────────────────────────────────────
+  const pv = (id: string, label: string) => ({ id, label, danger: 'none' as const, transport: 'profile' as const });
+  const veil = {
+    ...genesis, id: 'svc:Veil', title: 'Veil', asks: undefined,
+    health: { state: 'ok' as const, reason: 'Watch: online' },
+    meta: { role: 'The web OS', criticality: 'important', profiles: ['platform', 'critical', 'full'],
+      kept_because: 'Veil requires: room', mem_mb: 900, cpu_pct: 4.2, dependents: 4 },
+    verbs: [{ id: 'services-sick', label: 'Sick services', danger: 'none' as const, transport: 'fleet' as const, primary: true },
+      pv('profile-add:business', 'Add to business'), pv('reclassify-edge:Veil:Room', 'Make Veil -> Room soft')],
+  };
+  const pcalls: string[] = [];
+  await act(async () => {
+    root.render(createElement(SelectionPanel, {
+      key: 'doing', node: veil,
+      onVerb: async (_n: unknown, verb: { id: string }) => {
+        pcalls.push(verb.id);
+        return { ok: true, pr_url: 'https://github.com/Aitherium/AitherOS/pull/9' };
+      },
+    }));
+  });
+  const doing = container.querySelector('[data-block="doing"]');
+  check('doing block renders role, state, CPU, RAM and dependents',
+    (doing?.querySelector('[data-doing-line]')?.textContent ?? '') === 'The web OS · Healthy · CPU 4.2% · RAM 900 MB · 4 dependents',
+    doing?.querySelector('[data-doing-line]')?.textContent ?? '');
+  check('doing line never prints an unmeasured disk', !(doing?.textContent ?? '').includes('disk'));
+  check('profile verbs are not in the verb row',
+    ![...container.querySelectorAll('[data-block="verbs"] button')].some((b) => /business|soft/.test(b.textContent ?? '')));
+  check('in-tier chips are marked', container.querySelectorAll('[data-profiles] [data-in="true"]').length === 3);
+  const addBtn = container.querySelector('[data-profiles] button[data-tier="business"]') as HTMLElement | null;
+  check('a tier it can join is a button', Boolean(addBtn) && (addBtn?.textContent ?? '') === '+ business');
+  await act(async () => {
+    addBtn!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  });
+  check('the chip sends the profile verb', pcalls.join(',') === 'profile-add:business', pcalls.join(','));
+  check('the PR link is shown', Boolean(container.querySelector('[data-reply-pr]')));
+  check('kept because is shown', (container.querySelector('[data-kept]')?.textContent ?? '') === 'kept because Veil requires: room');
+  check('panel stays within five blocks', container.querySelectorAll('[data-node] > [data-block]').length <= 5,
+    String(container.querySelectorAll('[data-node] > [data-block]').length));
+
+  // Core: a fixed label, no chip buttons, even if a (forged) profile verb rides along.
+  await act(async () => {
+    root.render(createElement(SelectionPanel, {
+      key: 'core', node: { ...veil, id: 'svc:Chronicle', title: 'Chronicle',
+        meta: { criticality: 'core', profiles: ['business', 'platform', 'critical', 'full'], kept_because: 'core: never stopped' },
+        verbs: [veil.verbs[0], pv('profile-remove:business', 'Remove from business')] },
+      onVerb: async () => ({ ok: true }),
+    }));
+  });
+  check('core shows "core: never stopped"', (container.querySelector('[data-core]')?.textContent ?? '') === 'core: never stopped');
+  check('core has no profile buttons', container.querySelectorAll('[data-profiles] button').length === 0);
+
+  // An inference status verdict renders its lane table.
+  await act(async () => {
+    root.render(createElement(SelectionPanel, {
+      key: 'lanes', node: { ...genesis, id: 'galaxy:dgx', title: 'DGX', asks: undefined, meta: {},
+        verbs: [{ id: 'inference-status', label: 'Inference status', danger: 'none' as const, transport: 'fleet' as const, primary: true }] },
+      onVerb: async () => ({ ok: true, result: { mode: 'dgx', lanes: [
+        { lane: 'orchestrator', verdict: 'PASS', served_by: 'spark', latency_ms: 812 },
+        { lane: 'deepseek-v4-flash-pool', verdict: 'FAIL', served_by: '', latency_ms: null }] } }),
+    }));
+  });
+  const statusBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Inference status')!;
+  await act(async () => {
+    statusBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  });
+  const rowsEls = container.querySelectorAll('[data-lanes] tr');
+  check('lane table has one row per lane', rowsEls.length === 2, String(rowsEls.length));
+  check('lane row carries verdict and served_by', (rowsEls[0]?.textContent ?? '').includes('PASS')
+    && (rowsEls[0]?.textContent ?? '').includes('spark'));
+
+  // The profile lens: sums measured RAM and dims outsiders.
+  const { ProfileLens } = await import('../src/space/Hud');
+  const lensData = {
+    ...data,
+    nodes: [
+      ...data.nodes,
+      { ...veil, id: 'svc:A', meta: { profiles: ['business', 'full'], mem_mb: 1024 } },
+      { ...veil, id: 'svc:B', meta: { profiles: ['full'], mem_mb: 2048 } },
+      { ...veil, id: 'svc:C', meta: { profiles: ['business', 'full'] } },
+    ],
+  };
+  const seenTier: string[] = [];
+  await act(async () => {
+    root.render(createElement(ProfileLens, { key: 'lens', data: lensData, tier: 'business', onTier: (t: string) => seenTier.push(t) }));
+  });
+  const sum = container.querySelector('[data-lens-sum]')?.textContent ?? '';
+  check('lens sums the tier against the fleet, unmeasured counted honestly',
+    sum === 'business 1.0 GB of 3.0 GB · 2 services (1 measured)', sum);
+  const noneBtn = [...container.querySelectorAll('[data-lens] button')].find((b) => b.textContent === 'none')!;
+  await act(async () => {
+    noneBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  });
+  check('lens reports the chosen tier', seenTier.join(',') === 'none');
+
   await act(async () => root.unmount());
   // pretendToBeVisual runs a rAF timer that would keep node alive forever.
   dom.window.close();

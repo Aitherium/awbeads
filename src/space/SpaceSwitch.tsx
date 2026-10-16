@@ -16,7 +16,9 @@ import { indexUniverse, visibleAt } from '../universe/levels';
 import { search } from '../universe/selection';
 import type { SearchHit, SelectionAction, SelectionState } from '../universe/selection';
 import { allAsks } from '../universe/verbs';
-import { ModePill, NextPill, SearchLine } from './Hud';
+import { ModePill, NextPill, ProfileLens, SearchLine } from './Hud';
+import { lensOf } from './panel-text';
+import type { LensTier } from './panel-text';
 import { PALETTE } from './palette';
 import { askGlow, positions3d } from './scene';
 import { SelectionPanel } from './SelectionPanel';
@@ -37,6 +39,9 @@ export interface SpaceSwitchProps extends SpaceActions {
   onSelect?: (node: UniverseNode | null) => void;
   /** Defaults to the user's prefers-reduced-motion. */
   reducedMotion?: boolean;
+  /** The profile lens. Shown only when the host passes onLensChange (it stores the tier). */
+  lens?: LensTier;
+  onLensChange?: (tier: LensTier) => void;
   className?: string;
   style?: CSSProperties;
 }
@@ -77,6 +82,8 @@ export function SpaceSwitch(props: SpaceSwitchProps) {
   const glow = useMemo(() => askGlow(data), [data]);
   const hits = useMemo(() => (query ? search(data, query) : []), [data, query]);
   const matchIds = useMemo(() => new Set(hits.map((h) => h.id)), [hits]);
+  const lens = props.lens ?? 'none';
+  const dimIds = useMemo(() => lensOf(data, lens)?.dimIds, [data, lens]);
   const byId = indexUniverse(data).byId;
   const selected = state.selectedId ? byId.get(state.selectedId) ?? null : null;
 
@@ -201,6 +208,7 @@ export function SpaceSwitch(props: SpaceSwitchProps) {
           state={state}
           dispatch={dispatch}
           matchIds={matchIds}
+          dimIds={dimIds}
           reducedMotion={reducedMotion}
           exploringId={exploringId}
           anchorRef={anchorRef}
@@ -215,6 +223,7 @@ export function SpaceSwitch(props: SpaceSwitchProps) {
             dispatch={dispatch}
             glow={glow}
             matchIds={matchIds}
+            dimIds={dimIds}
             reducedMotion={reducedMotion}
             anchorRef={anchorRef}
           />
@@ -243,6 +252,7 @@ export function SpaceSwitch(props: SpaceSwitchProps) {
         ) : null}
         <ModePill mode={mode} onModeChange={onModeChange} note={note} />
         <NextPill data={data} onFly={(id) => dispatch({ type: 'flyTo', id })} />
+        {props.onLensChange ? <ProfileLens data={data} tier={lens} onTier={props.onLensChange} /> : null}
         {selected ? (
           <div
             ref={anchorRef}

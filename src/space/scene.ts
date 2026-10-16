@@ -103,10 +103,13 @@ export interface BuildOptions {
   /** The full universe, for child counts. */
   data?: UniverseData;
   glow?: AskGlow;
+  /** The profile lens: ids drawn dim (status untouched). */
+  dimIds?: ReadonlySet<string>;
 }
 
 const GHOST_DIM = 0.3;
 const QUIET_DIM = 0.45;
+export const LENS_DIM = 0.3;
 
 export function buildInstances(
   visible: VisibleSet,
@@ -134,7 +137,8 @@ export function buildInstances(
     ghost[i] = isGhost ? 1 : 0;
     const state = node.health?.state;
     hollow[i] = isHollow(state) ? 1 : 0;
-    const dim = isGhost ? GHOST_DIM : isQuiet(state) ? QUIET_DIM : 1;
+    const lensed = options.dimIds?.has(node.id) ? LENS_DIM : 1;
+    const dim = (isGhost ? GHOST_DIM : isQuiet(state) ? QUIET_DIM : 1) * lensed;
     const [r, g, b] = hexToRgb(healthColor(state));
     colors[i * 3] = r * dim;
     colors[i * 3 + 1] = g * dim;

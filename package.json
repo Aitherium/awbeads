@@ -33,6 +33,10 @@
       "types": "./src/space/index.ts",
       "import": "./src/space/index.ts"
     },
+    "./space2d": {
+      "types": "./src/space/flat.ts",
+      "import": "./src/space/flat.ts"
+    },
     "./bead-space.css": "./src/bead-space.css"
   },
   "files": [
@@ -69,6 +73,10 @@
       "./space": {
         "types": "./dist/space/index.d.ts",
         "import": "./dist/space/index.js"
+      },
+      "./space2d": {
+        "types": "./dist/space/flat.d.ts",
+        "import": "./dist/space/flat.js"
       },
       "./bead-space.css": "./dist/bead-space.css"
     },
