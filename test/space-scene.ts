@@ -11,7 +11,7 @@ import { act, createElement } from 'react';
 import { zoomGestureAllowed } from '../src/core/bead-space';
 import { spaceGestureAllowed } from '../src/space/gesture';
 import { PALETTE, healthColor, isHollow } from '../src/space/palette';
-import { lensOf } from '../src/space/panel-text';
+import { lensOf, lensSentence } from '../src/space/panel-text';
 import { LENS_DIM, askGlow, buildInstances, positions3d } from '../src/space/scene';
 import { attachCards, visibleAt } from '../src/universe';
 import type { DeskCard } from '../src/types';
@@ -54,6 +54,23 @@ check('dashed link for kind=related', fleet.dashedLinkPositions.length === 0 || 
   const lens = lensOf(data, 'business');
   check('lens dims every svc outside the tier (fixture has no profiles)', Boolean(lens && lens.dimIds.has(someSvc.id)));
   check('lens none dims nothing', lensOf(data, 'none') === null);
+  check('lens without tier_ram sums the beads (services)', lens?.noun === 'services');
+  // The apply set: galaxy:fleet tier_ram counts every container the sidecar keeps,
+  // including the ones no services.yaml bead carries (Postgres, the tunnel, DNS).
+  const withApply = {
+    ...data,
+    nodes: data.nodes.map((n) => (n.id === 'galaxy:fleet'
+      ? { ...n, meta: { ...(n.meta ?? {}), fleet_ram_mb: 22937.6,
+        tier_ram: { business: { mb: 16793.6, measured: 40, containers: 43 } } } }
+      : n)),
+  };
+  const applied = lensOf(withApply, 'business');
+  check('lens prefers the apply-set sum over the beads', applied?.ramMb === 16793.6
+    && applied?.fleetMb === 22937.6 && applied?.count === 43 && applied?.noun === 'containers');
+  check('lens sentence names containers and the unmeasured', lensSentence(applied!)
+    === 'business 16.4 GB of 22.4 GB · 43 containers (40 measured)');
+  check('a tier tier_ram lacks falls back to the beads', lensOf(withApply, 'platform')?.noun === 'services');
+  check('lens still dims by membership with tier_ram', Boolean(applied && applied.dimIds.has(someSvc.id)));
   const lit = buildInstances(v, positions, { data, glow });
   const dimmed = buildInstances(v, positions, { data, glow, dimIds: new Set([someSvc.id]) });
   const at = lit.ids.indexOf(someSvc.id);
