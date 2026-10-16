@@ -11,7 +11,7 @@ import { act, createElement } from 'react';
 import { zoomGestureAllowed } from '../src/core/bead-space';
 import { spaceGestureAllowed } from '../src/space/gesture';
 import { PALETTE, healthColor, isHollow } from '../src/space/palette';
-import { lensOf, lensSentence } from '../src/space/panel-text';
+import { auditLine, auditSentence, auditSummaryOf, lensOf, lensSentence } from '../src/space/panel-text';
 import { LENS_DIM, askGlow, buildInstances, positions3d } from '../src/space/scene';
 import { attachCards, visibleAt } from '../src/universe';
 import type { DeskCard } from '../src/types';
@@ -284,6 +284,30 @@ async function panelChecks(): Promise<void> {
   check('lane table has one row per lane', rowsEls.length === 2, String(rowsEls.length));
   check('lane row carries verdict and served_by', (rowsEls[0]?.textContent ?? '').includes('PASS')
     && (rowsEls[0]?.textContent ?? '').includes('spark'));
+
+  // The audit block: the verdict, what a trim frees, the use, and the evidence line.
+  await act(async () => {
+    root.render(createElement(SelectionPanel, {
+      key: 'audit', node: { ...veil, id: 'svc:Iris', title: 'Iris', asks: undefined,
+        meta: { verdict: 'trim-candidate', frees_mb: 99, requests: 6, log_hours: 13.4, mem_mb: 99,
+          evidence: 'not in business: a business trim stops it' },
+        verbs: [{ id: 'unit-park:aither-iris', label: 'Park', danger: 'confirm' as const, transport: 'unit' as const, primary: true }] },
+      onVerb: async () => ({ ok: true }),
+    }));
+  });
+  const auditEl = container.querySelector('[data-block="audit"]');
+  check('audit block shows the verdict, frees and use',
+    (auditEl?.textContent ?? '').includes('Trim candidate · frees 99 MB · 6 requests in 13 h'), auditEl?.textContent ?? '');
+  check('audit block shows the evidence', (container.querySelector('[data-evidence]')?.textContent ?? '')
+    === 'not in business: a business trim stops it');
+  check('no verdict, no audit block', auditLine({ ...veil, meta: {} }) === '');
+  const summary = auditSummaryOf({ ...data, nodes: data.nodes.map((n) => (n.id === 'galaxy:fleet'
+    ? { ...n, meta: { audit: { running: 53, ram_mb: 22937.6, frees_mb: 320, by_verdict: { waste: 1 },
+      generated_at: '2026-10-16T09:00:00Z', logs_scanned: true } } } : n)) });
+  check('audit sentence: running, RAM, trim frees, age',
+    auditSentence(summary!, Date.parse('2026-10-16T09:12:00Z'))
+      === '53 running · 22.4 GB · trim frees 320 MB · measured 12 min ago', summary ? auditSentence(summary) : 'null');
+  check('no audit on the fleet = null summary', auditSummaryOf(data) === null);
 
   // The profile lens: sums measured RAM and dims outsiders.
   const { ProfileLens } = await import('../src/space/Hud');

@@ -13,8 +13,9 @@ export { SelectionPanel } from './SelectionPanel';
 export {
   ADDED_PREFIX, CONFIRM_WINDOW_MS, CORE_LABEL, LENS_TIERS, doingLine, formatMb, hasDoing, isCore,
   isProfileVerb, keptBecause, laneRowsOf, lensOf, lensSentence, profilesOf, stateSentence,
+  AUDIT_VERDICTS, VERDICT_COLORS, VERDICT_WORDS, auditLine, auditSentence, auditSummaryOf, verdictOf,
 } from './panel-text';
-export type { LaneRow, LensSummary, LensTier, ProfileTier } from './panel-text';
+export type { AuditSummary, AuditVerdict, LaneRow, LensSummary, LensTier, ProfileTier } from './panel-text';
 export type {
   ActionResult,
   ExploreResult,
