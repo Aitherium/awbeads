@@ -152,6 +152,37 @@ async function panelChecks(): Promise<void> {
   check('danger verb: second click sends confirmed:true', calls.length === 1 && calls[0].verb === 'restart' && calls[0].confirmed);
   const verbButtons = container.querySelectorAll('[data-block="verbs"] button');
   check('at most 1 primary + 2 secondary verbs', verbButtons.length === 3, String(verbButtons.length));
+
+  // An ask owns the one big button: the verbs drop into its row of chips, and a healthy
+  // state line (which would contradict "restart it?") is not shown.
+  await act(async () => {
+    root.render(createElement(SelectionPanel, {
+      key: 'asking',
+      node: {
+        ...genesis,
+        health: { state: 'ok', reason: 'Watch: online' },
+        asks: [{ cardId: 'c9', title: 'Restart the watchdog?', urgency: 'normal', credential: false, how: 'explicit',
+          options: [{ key: 'y', label: 'Restart it', recommended: true }, { key: 'n', label: 'Leave it' }] }],
+      },
+      onVerb: async () => ({ ok: true }),
+      onAnswer: async () => ({ ok: true }),
+    }));
+  });
+  const askBlock = container.querySelector('[data-block="ask"]');
+  const bigs = [...container.querySelectorAll('button')].filter((b) => (b as HTMLElement).style.width === '100%');
+  check('with an ask: one big button, the recommended answer', bigs.length === 1 && bigs[0].textContent === 'Restart it',
+    bigs.map((b) => b.textContent).join('|'));
+  check('with an ask: the verbs sit in the ask block as chips',
+    Boolean(askBlock && askBlock.querySelector('[data-block="verbs"] button')));
+  check('with an ask: a healthy state line is not shown', !container.querySelector('[data-state]'));
+  await act(async () => {
+    root.render(createElement(SelectionPanel, {
+      key: 'healthy', node: { ...genesis, asks: undefined, health: { state: 'ok', reason: 'Watch: online' } },
+    }));
+  });
+  check('state line reads "Healthy · Watch online"',
+    (container.querySelector('[data-state]')?.textContent ?? '') === 'Healthy · Watch online',
+    container.querySelector('[data-state]')?.textContent ?? '');
   await act(async () => root.unmount());
   // pretendToBeVisual runs a rAF timer that would keep node alive forever.
   dom.window.close();

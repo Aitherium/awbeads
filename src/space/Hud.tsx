@@ -96,13 +96,19 @@ export function SearchLine({ data, query, hits, active, onQuery, onFly, onNext, 
 export interface NextPillProps {
   data: UniverseData;
   onFly: (nodeId: string) => void;
+  /**
+   * Which ask the pill names (wraps). Default 0, the top one. A host that cycles -- a
+   * click on the pill while already at that ask moves on to the next -- passes its cursor.
+   */
+  index?: number;
 }
 
-/** Bottom-centre: how many things need you and the top one. Click (or Space) flies there. */
-export function NextPill({ data, onFly }: NextPillProps) {
+/** Bottom-centre: how many things need you and the one it flies to. Click (or Space) flies there. */
+export function NextPill({ data, onFly, index = 0 }: NextPillProps) {
   const asks = allAsks(data);
-  const top = asks[0];
   const n = asks.length;
+  const at = n ? ((index % n) + n) % n : 0;
+  const top = asks[at];
   return (
     <button
       type="button"
@@ -129,7 +135,9 @@ export function NextPill({ data, onFly }: NextPillProps) {
         pointerEvents: 'auto',
       }}
     >
-      {top ? `${n} thing${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} you · ${top.ask.title}` : 'Nothing needs you'}
+      {top
+        ? `${n} thing${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} you · ${n > 1 ? `${at + 1}/${n} · ` : ''}${top.ask.title}`
+        : 'Nothing needs you'}
     </button>
   );
 }

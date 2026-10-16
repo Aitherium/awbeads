@@ -89,6 +89,12 @@
   cursor: grabbing;
 }
 
+/* Planets are focusable (tabindex 0) for the keyboard; a MOUSE click must not leave the
+   browser's square focus box around the sprite. Keyboard focus keeps its outline. */
+.bead-space .bs-node:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .bead-space .bs-planet-core {
   fill: var(--bs-planet-fill);
   stroke: var(--bs-planet-stroke);
