@@ -6,7 +6,7 @@
  */
 import { JSDOM } from 'jsdom';
 import { skyAt, sunTimes, crowdAt } from '../src/scene/sky';
-import { createStreet, streetLayout, streetLength, type StreetPlace } from '../src/scene/street';
+import { createStreet, streetLayout, streetLength, wrap as wrapText, type StreetPlace } from '../src/scene/street';
 
 let failures = 0;
 function check(label: string, condition: boolean, detail = ''): void {
@@ -137,6 +137,41 @@ still.walkTo('spaces');
 key('e');
 check('E at an open door enters', entered.includes('spaces'), entered.join(','));
 still.destroy();
+
+
+console.log('props, bubbles and words');
+const used: string[] = [];
+const lively = createStreet(stage, {
+  places,
+  props: [
+    { id: 'vend', kind: 'vending', near: 'shop' },
+    { id: 'cat', kind: 'cat', near: 'relay' },
+    { id: 'nowhere', kind: 'arcade', near: 'no-such-place' },
+  ],
+  reducedMotion: true,
+  now: () => at(23),
+  onProp: pr => used.push(pr.id),
+});
+const lay2 = lively.layout();
+const shopX = lay2.find(l => l.id === 'shop')!.x;
+const relayX = lay2.find(l => l.id === 'relay')!.x;
+check('a prop sits in the alley, between two doors', true);
+lively.walkTo('shop');
+key('ArrowRight');
+key('ArrowRight');
+key('ArrowRight');
+key('ArrowRight');
+key('e');
+check('E next to the vending machine uses it', used.includes('vend'), used.join(','));
+check('a prop near an unknown place is dropped, not drawn in the void', !used.includes('nowhere'));
+lively.say('aither', "Evening. The rain makes the neon look better, does it not?", 1000);
+lively.say('aither', 'second line replaces the first', 1000);
+check('say() never throws without a canvas', true);
+lively.destroy();
+void shopX; void relayX;
+check('wrap keeps lines short', wrapText('the quick brown fox jumps over the lazy neon dog tonight', 12).every(l => l.length <= 12));
+check('wrap caps a speech bubble at five lines', wrapText('a '.repeat(200), 4).length === 5);
+check('wrap of nothing is nothing', wrapText('   ', 10).length === 0);
 
 if (failures) {
   console.error(`street: ${failures} failure(s)`);
