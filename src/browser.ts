@@ -4,4 +4,5 @@
  * `npm run build:tunnel` also copies it (and the css) into services/mesh/static/bead-space/.
  */
 export { createBeadSpace } from './core/bead-space';
+export { createStreet, skyAt } from './scene';
 export { fromPipelineUniverse, PIPELINE_CLUSTER_ORDER, PIPELINE_SCHEMA } from './adapters/pipeline';

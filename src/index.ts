@@ -1,5 +1,6 @@
 export { createBeadSpace } from './core/bead-space';
 export { hash } from './core/hash';
+export * from './scene';
 export type {
   BeadData,
   BeadLink,
