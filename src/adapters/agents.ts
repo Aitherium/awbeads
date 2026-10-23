@@ -144,6 +144,77 @@ export function fromAgentActivity(
   return { nodes, links };
 }
 
+/** One roster row from GET /api/agent-activity `agents` (the agents that exist). */
+export interface AgentRosterRecord {
+  id: string;
+  name?: string;
+  description?: string;
+  status?: string;
+  category?: string;
+  lastActivity?: string;
+  recentEventCount?: number;
+}
+
+const ROSTER_STATUS: Record<string, BeadStatus> = {
+  online: 'open',
+  idle: 'open',
+  ready: 'open',
+  busy: 'in_progress',
+  working: 'in_progress',
+  running: 'in_progress',
+  degraded: 'blocked',
+  error: 'blocked',
+  offline: 'deferred',
+  stopped: 'deferred',
+};
+
+/**
+ * Agents as planets, with their in-flight tasks around them.
+ *
+ * The task-only view rendered "No data available" whenever TaskHub was empty (it is
+ * in-memory and empty after every Genesis restart), although /api/agent-activity
+ * also sends the roster: 50 agents that exist and are online. The roster is the
+ * universe; tasks hang off their agent with a parent-child link.
+ */
+export function fromAgentRoster(payload: {
+  tasks?: AgentTaskRecord[];
+  agents?: AgentRosterRecord[];
+}): BeadData {
+  const tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
+  const roster = Array.isArray(payload?.agents) ? payload.agents : [];
+  const work = fromAgentActivity(tasks);
+  const busy = new Set(
+    work.nodes.filter((n) => n.status === 'in_progress').map((n) => String(n.meta?.agent ?? n.cluster)),
+  );
+  const nodes: BeadNode[] = [];
+  const links: BeadLink[] = [...work.links];
+  const ids = new Set<string>();
+  for (const agent of roster) {
+    if (!agent || typeof agent.id !== 'string' || !agent.id || ids.has(`agent:${agent.id}`)) continue;
+    const id = `agent:${agent.id}`;
+    ids.add(id);
+    const status = busy.has(agent.id)
+      ? 'in_progress'
+      : (ROSTER_STATUS[(agent.status ?? '').toLowerCase()] ?? 'open');
+    nodes.push({
+      id,
+      title: agent.name || agent.id,
+      cluster: agent.category || 'agents',
+      status,
+      assignee: status === 'in_progress' ? agent.id : null,
+      createdAt: iso(agent.lastActivity),
+      stateStartedAt: null,
+      meta: { kind: 'agent', agent: agent.id, description: agent.description, events: agent.recentEventCount ?? 0 },
+    });
+  }
+  for (const task of work.nodes) {
+    const agent = String(task.meta?.agent ?? '');
+    nodes.push(task);
+    if (agent && ids.has(`agent:${agent}`)) links.push({ source: `agent:${agent}`, target: task.id, kind: 'parent-child' });
+  }
+  return { nodes, links };
+}
+
 /**
  * Merge agent activity with other work sources into one universe.
  *

@@ -24,13 +24,19 @@ import {
 } from 'd3-force';
 import { select, type Selection } from 'd3-selection';
 import { line as d3line, curveCatmullRom } from 'd3-shape';
-import { zoom as d3zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
+import { zoom as d3zoom, zoomIdentity, zoomTransform, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
 import 'd3-transition';
+// Inline easings (the d3-ease curves): a packaged consumer that compiles this source has
+// no @types/d3-ease, and two one-liners are not worth a dependency.
+const easeCubicInOut = (t: number): number => ((t *= 2) <= 1 ? t * t * t : (t -= 2) * t * t + 2) / 2;
+const easeCubicOut = (t: number): number => --t * t * t + 1;
 
 import { createGeometry, trailSegments } from './geometry';
 import { hash } from './hash';
+import { cullLabels, estimateLabelWidth, type LabelBox } from './labels';
 import type {
   BeadData,
+  BeadUpdateOptions,
   BeadLink,
   BeadNode,
   BeadSpaceHandle,
@@ -198,6 +204,14 @@ export function createBeadSpace(
     merge.append('feMergeNode').attr('in', 'SourceGraphic');
   }
 
+  // Parallax: a sparser far layer drifts slower than the near one (inserted first = behind).
+  // A soft specular highlight hosts can show on spheres (`.bs-galaxy .bs-sheen`).
+  const sheenId = `${instanceId}-sheen`;
+  const sheen = defs.append('radialGradient').attr('id', sheenId).attr('cx', '35%').attr('cy', '30%').attr('r', '70%');
+  sheen.append('stop').attr('offset', '0%').attr('stop-color', '#ffffff').attr('stop-opacity', 0.55);
+  sheen.append('stop').attr('offset', '45%').attr('stop-color', '#ffffff').attr('stop-opacity', 0.08);
+  sheen.append('stop').attr('offset', '100%').attr('stop-color', '#000000').attr('stop-opacity', 0.35);
+  const starfieldFar = svg.append('g').attr('class', 'bs-starfield bs-starfield-far');
   const starfield = svg.append('g').attr('class', 'bs-starfield');
   const stage = svg.append('g');
   const linkLayer = stage.append('g');
@@ -207,6 +221,9 @@ export function createBeadSpace(
   const orbitLayer = stage.append('g');
   const stationLayer = stage.append('g');
   const patrolLayer = stage.append('g');
+  // Activity as motion: pulses and packets ride above the bodies, the probe above all.
+  const fxLayer = stage.append('g').attr('class', 'bs-fx');
+  const probeLayer = stage.append('g').attr('class', 'bs-probe-layer');
 
   const tooltip = document.createElement('aside');
   tooltip.className = 'bs-tooltip';
@@ -253,7 +270,27 @@ export function createBeadSpace(
   function drawStarfield(): void {
     if (options.starfield === false) {
       starfield.selectAll('circle').remove();
+      starfieldFar.selectAll('circle').remove();
       return;
+    }
+    if (options.parallax) {
+      // Over-drawn by the drift margin so a pan never reveals an empty edge.
+      starfieldFar
+        .selectAll('circle')
+        .data(
+          range(Math.max(80, Math.floor((width * height) / 9000))).map(() => ({
+            x: -width * 0.25 + Math.random() * width * 1.5,
+            y: -height * 0.25 + Math.random() * height * 1.5,
+            radius: 0.25 + Math.random() * 0.6,
+            opacity: 0.08 + Math.random() * 0.3,
+          })),
+        )
+        .join('circle')
+        .attr('class', 'bs-star bs-star-far')
+        .attr('cx', (star) => star.x)
+        .attr('cy', (star) => star.y)
+        .attr('r', (star) => star.radius)
+        .attr('opacity', (star) => star.opacity);
     }
     starfield
       .selectAll('circle')
@@ -274,7 +311,11 @@ export function createBeadSpace(
   }
 
   // ── scales / encodings ────────────────────────────────────────────────────────
-  const radius = (node: SimNode): number => 8 + Math.min(13, Math.sqrt(node.degree) * 3.4);
+  const radius = (node: SimNode): number => {
+    const custom = options.nodeRadius?.(node);
+    if (typeof custom === 'number' && Number.isFinite(custom) && custom > 0) return custom;
+    return 8 + Math.min(13, Math.sqrt(node.degree) * 3.4);
+  };
 
   const ownerColor = (node: SimNode): string =>
     node.assignee ? ownerPalette[hash(node.assignee) % ownerPalette.length] : '#edf5ff';
@@ -291,6 +332,8 @@ export function createBeadSpace(
    * So: owner colour when there is an owner, cluster colour otherwise.
    */
   function tintColor(node: SimNode): string {
+    const custom = options.nodeColor?.(node);
+    if (custom) return custom;
     if (node.assignee) return ownerColor(node);
     const index = clusterOrder.indexOf(node.cluster);
     return clusterPalette[(index < 0 ? hash(node.cluster) : index) % clusterPalette.length];
@@ -376,6 +419,28 @@ export function createBeadSpace(
     }
   }
 
+  /**
+   * A host-pinned body: world position = view centre + the host's offset. Pinned bodies
+   * ignore the force layout, so a host that lays a level out itself (rings, a hex of
+   * galaxies) gets exactly that layout with no dot soup and no drift.
+   */
+  function pinOf(node: BeadNode): [number, number] | null {
+    const offset = options.fixedPosition?.(node);
+    if (!offset || !Number.isFinite(offset[0]) || !Number.isFinite(offset[1])) return null;
+    return [width / 2 + offset[0], height / 2 + offset[1]];
+  }
+
+  function applyPins(): void {
+    for (const node of nodes) {
+      const pin = pinOf(node);
+      if (!pin) continue;
+      node.fx = pin[0];
+      node.fy = pin[1];
+      node.x = pin[0];
+      node.y = pin[1];
+    }
+  }
+
   /** Deterministic seed position so first paint is already cluster-shaped. */
   function seedPosition(node: SimNode): void {
     const angle = ((hash(node.id) % 360) * Math.PI) / 180;
@@ -397,6 +462,7 @@ export function createBeadSpace(
   }
 
   function showTooltip(event: { clientX: number; clientY: number }, node: SimNode): void {
+    if (options.tooltips === false) return;
     const title = document.createElement('strong');
     title.textContent = node.id;
     // Wrapped in an element so the stylesheet can clamp it — real descriptions run long.
@@ -426,16 +492,68 @@ export function createBeadSpace(
   // The explicit form never touches the DOM, so the fallback is unreachable.
   const zoom: ZoomBehavior<SVGSVGElement, unknown> = d3zoom<SVGSVGElement, unknown>()
     .extent((): [[number, number], [number, number]] => [[0, 0], [width, height]])
-    .scaleExtent([0.3, 5])
-    .filter(zoomGestureAllowed)
+    .scaleExtent(options.scaleExtent ?? [0.3, 5])
+    .filter((event) =>
+      options.wheelZoom && event.type === 'wheel' ? true : zoomGestureAllowed(event),
+    )
     .on('zoom', (event) => {
-      stage.attr('transform', event.transform.toString());
+      const t = event.transform as ZoomTransform;
+      stage.attr('transform', t.toString());
       // Zooming in is the "tell me what these are" gesture — honour it.
       root.classList.toggle(
         'bs-labels-on',
-        nodes.length <= labelsAlwaysBelow || event.transform.k >= labelZoom,
+        nodes.length <= labelsAlwaysBelow || t.k >= labelZoom,
       );
+      if (options.parallax) {
+        // Near stars drift at 6 %, far stars at 2 % of the camera: depth without a 3D engine.
+        starfield.attr('transform', `translate(${(t.x * 0.06).toFixed(1)} ${(t.y * 0.06).toFixed(1)})`);
+        starfieldFar.attr('transform', `translate(${(t.x * 0.02).toFixed(1)} ${(t.y * 0.02).toFixed(1)})`);
+      }
+      scheduleLabelCull();
+      options.onZoom?.({ k: t.k, fitK: homeTransform.k, user: Boolean(event.sourceEvent) });
     });
+
+  // ── label collision (semantic zoom) ─────────────────────────────────────────
+  // With `labelCollision`, labels keep a constant SCREEN size (counter-scaled) and are
+  // culled greedily by priority so they never overlap: the selected body first, then
+  // bigger bodies. A culled label still shows in the hover tooltip.
+  let cullFrame: number | null = null;
+  const LABEL_PX = 12;
+  function scheduleLabelCull(): void {
+    if (!options.labelCollision || cullFrame !== null || typeof window === 'undefined') return;
+    cullFrame = window.requestAnimationFrame(() => {
+      cullFrame = null;
+      cullLabelsNow();
+    });
+  }
+  function cullLabelsNow(): void {
+    if (!options.labelCollision || destroyed) return;
+    const t = zoomTransform(svgElement);
+    const fontWorld = LABEL_PX / t.k;
+    const boxes: LabelBox[] = [];
+    for (const node of nodes) {
+      if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) continue;
+      const r = radius(node);
+      const w = estimateLabelWidth(labelFor(node), LABEL_PX);
+      const cx = t.applyX(node.x);
+      const top = t.applyY(node.y) + r * t.k + 4;
+      boxes.push({
+        id: node.id,
+        x: cx - w / 2,
+        y: top,
+        w,
+        h: LABEL_PX + 2,
+        priority: (node.id === selectedId ? 1e6 : 0) + r * 10 + node.degree,
+      });
+    }
+    const shown = cullLabels(boxes, { width, height });
+    nodeSelection
+      .classed('bs-label-hidden', (node) => !shown.has(node.id))
+      .select('.bs-label')
+      .attr('y', (node) => radius(node as SimNode) + 4 / t.k + fontWorld)
+      .style('font-size', `${fontWorld.toFixed(3)}px`)
+      .style('stroke-width', `${(3 / t.k).toFixed(3)}px`);
+  }
 
   function followCamera(x: number, y: number): void {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
@@ -453,8 +571,8 @@ export function createBeadSpace(
    * ~25-node sample. Real datasets are an order of magnitude bigger and spill off every edge,
    * so the default view showed a crop of a graph with no indication there was more.
    */
-  function fitToContent(animate = true): void {
-    if (nodes.length === 0) return;
+  function computeFit(): ZoomTransform | null {
+    if (nodes.length === 0) return null;
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -467,16 +585,22 @@ export function createBeadSpace(
       minY = Math.min(minY, node.y - r);
       maxY = Math.max(maxY, node.y + r);
     }
-    if (!Number.isFinite(minX) || maxX <= minX || maxY <= minY) return;
+    if (!Number.isFinite(minX) || maxX <= minX || maxY <= minY) return null;
 
+    const [minK, maxK] = options.scaleExtent ?? [0.3, 5];
     const scale = Math.max(
-      0.3,
-      Math.min(2, 0.94 * Math.min(width / (maxX - minX), height / (maxY - minY))),
+      minK,
+      Math.min(Math.min(2, maxK), 0.94 * Math.min(width / (maxX - minX), height / (maxY - minY))),
     );
-    const transform = zoomIdentity
+    return zoomIdentity
       .translate(width / 2, height / 2)
       .scale(scale)
       .translate(-(minX + maxX) / 2, -(minY + maxY) / 2);
+  }
+
+  function fitToContent(animate = true): void {
+    const transform = computeFit();
+    if (!transform) return;
     homeTransform = transform;
     if (animate && motionAllowed) {
       svg.transition().duration(500).call(zoom.transform as never, transform);
@@ -575,6 +699,14 @@ export function createBeadSpace(
     filters.select('feFlood').attr('flood-color', (color) => color as string);
   }
 
+  // Touch long-press = right-click (owner: "right-click/long-press = same verbs").
+  let longPress: { start: { x: number; y: number }; timer: number } | null = null;
+  let suppressClick = false;
+  function cancelLongPress(): void {
+    if (longPress) window.clearTimeout(longPress.timer);
+    longPress = null;
+  }
+
   function selectNode(node: SimNode | null, event?: { clientX: number; clientY: number }): void {
     selectedId = node?.id ?? null;
     if (node && event) showTooltip(event, node);
@@ -591,13 +723,17 @@ export function createBeadSpace(
       .join((enter) => {
         const group = enter.append('g');
         group.append('circle').attr('class', 'bs-planet-core');
+        group.append('circle').attr('class', 'bs-sheen');
         group.append('image').attr('class', 'bs-planet-sprite');
         group.append('circle').attr('class', 'bs-selection-ring');
         group.append('text').attr('class', 'bs-label');
         return group;
       })
       // Status class is an AitherOS addition — upstream had no visual for blocked/deferred/done.
-      .attr('class', (node) => `bs-node status-${node.status.replace('_', '-')}`)
+      .attr('class', (node) => {
+        const extra = options.nodeClass?.(node);
+        return `bs-node status-${node.status.replace('_', '-')}${extra ? ` ${extra}` : ''}`;
+      })
       .attr('tabindex', 0)
       .attr('role', 'button')
       .attr('aria-label', (node) => `${node.id}: ${node.title}`)
@@ -608,8 +744,37 @@ export function createBeadSpace(
       })
       .on('click', (event: MouseEvent, node) => {
         event.stopPropagation();
+        if (suppressClick) {
+          suppressClick = false;
+          return;
+        }
         selectNode(node, event);
       })
+      .on('contextmenu', (event: MouseEvent, node) => {
+        if (!options.onContextMenu) return;
+        event.preventDefault();
+        event.stopPropagation();
+        options.onContextMenu(node, { clientX: event.clientX, clientY: event.clientY });
+      })
+      .on('pointerdown.longpress', (event: PointerEvent, node) => {
+        if (!options.onContextMenu || event.pointerType === 'mouse') return;
+        cancelLongPress();
+        const start = { x: event.clientX, y: event.clientY };
+        longPress = {
+          start,
+          timer: window.setTimeout(() => {
+            longPress = null;
+            suppressClick = true;
+            options.onContextMenu?.(node, { clientX: start.x, clientY: start.y });
+          }, 520),
+        };
+      })
+      .on('pointermove.longpress', (event: PointerEvent) => {
+        if (longPress && Math.hypot(event.clientX - longPress.start.x, event.clientY - longPress.start.y) > 8) {
+          cancelLongPress();
+        }
+      })
+      .on('pointerup.longpress pointercancel.longpress', () => cancelLongPress())
       .on('keydown', (event: KeyboardEvent, node) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
@@ -618,6 +783,15 @@ export function createBeadSpace(
       });
 
     nodeSelection.select('.bs-planet-core').attr('r', (node) => radius(node as SimNode));
+    nodeSelection
+      .select('.bs-sheen')
+      .attr('r', (node) => radius(node as SimNode))
+      .attr('fill', `url(#${sheenId})`);
+    // The body's tint as a custom property, so host classes (a glowing galaxy core, a
+    // busy halo) can colour by it without a filter per colour.
+    nodeSelection.each(function setTint(node) {
+      (this as SVGGElement).style.setProperty('--bs-core-tint', tintColor(node as SimNode));
+    });
     nodeSelection
       .select('.bs-planet-sprite')
       .attr('href', (node) => planetSprite(node as SimNode))
@@ -654,8 +828,9 @@ export function createBeadSpace(
         })
         .on('end', (event, node) => {
           if (!event.active) simulation.alphaTarget(0);
-          node.fx = null;
-          node.fy = null;
+          const pin = pinOf(node);
+          node.fx = pin ? pin[0] : null;
+          node.fy = pin ? pin[1] : null;
         }),
     );
   }
@@ -997,6 +1172,7 @@ export function createBeadSpace(
     for (const node of nodes) {
       if (!previous.has(node.id)) seedPosition(node);
     }
+    applyPins();
 
     simulation.nodes(nodes);
     (simulation.force('link') as ReturnType<typeof forceLink>).links(links as never);
@@ -1005,6 +1181,7 @@ export function createBeadSpace(
     syncWorkers();
     if (selectedId && !validIds.has(selectedId)) selectNode(null);
     updateFocus();
+    scheduleLabelCull();
     // A first paint gets a full settle; a refresh whose TOPOLOGY changed gets a
     // small nudge; a same-graph refresh (status/meta only) gets none — positions
     // are already correct and a restart would only make the field twitch.
@@ -1196,15 +1373,212 @@ export function createBeadSpace(
     );
     if (delta < 48) return;
     assignAgeRadii();
+    applyPins();
+    renderTick();
     // Let the cluster force re-settle into the new box rather than teleporting nodes.
     heat(Math.max(simulation.alpha(), 0.3));
     if (!followedOwner) svg.call(zoom.transform, homeTransform);
   }
 
-  return {
-    update(next: BeadData) {
+  // ── camera flights ──────────────────────────────────────────────────────────
+  const FLIGHT_MS = 650;
+
+  function animateTo(transform: ZoomTransform, duration = FLIGHT_MS): Promise<void> {
+    return new Promise((resolve) => {
+      if (destroyed) return resolve();
+      if (!motionAllowed || duration <= 0) {
+        svg.call(zoom.transform, transform);
+        return resolve();
+      }
+      svg
+        .transition('bs-flight')
+        .duration(duration)
+        .ease(easeCubicInOut)
+        .call(zoom.transform as never, transform)
+        .on('end interrupt', () => resolve());
+    });
+  }
+
+  function centeredOn(x: number, y: number, k: number): ZoomTransform {
+    return zoomIdentity.translate(width / 2, height / 2).scale(k).translate(-x, -y);
+  }
+
+  /** A NEW level arrives: `in` grows out of the centre, `out` pulls back from the anchor. */
+  function arrive(opts: BeadUpdateOptions): void {
+    const fit = computeFit();
+    if (!fit) return;
+    homeTransform = fit;
+    userMovedCamera = true; // the host drives this camera now; auto-fit timers stand down
+    for (const timer of fitTimers) window.clearTimeout(timer);
+    fitTimers.length = 0;
+    if (!motionAllowed) {
+      svg.call(zoom.transform, fit);
+      return;
+    }
+    let start: ZoomTransform;
+    if (opts.enter === 'out') {
+      const anchor = opts.anchorId ? nodes.find((n) => n.id === opts.anchorId) : null;
+      start = anchor ? centeredOn(anchor.x, anchor.y, Math.min(fit.k * 4, (options.scaleExtent ?? [0.3, 5])[1])) : fit.scale(1.6);
+    } else {
+      // Grow out of the centre: start at a fraction of the framing scale, same centre.
+      const cx = fit.invertX(width / 2);
+      const cy = fit.invertY(height / 2);
+      start = centeredOn(cx, cy, fit.k * 0.28);
+    }
+    svg.interrupt('bs-flight');
+    svg.call(zoom.transform, start);
+    root.classList.remove('bs-arriving');
+    void root.offsetWidth; // restart the CSS fade
+    root.classList.add('bs-arriving');
+    svg
+      .transition('bs-flight')
+      .duration(760)
+      .ease(easeCubicOut)
+      .call(zoom.transform as never, fit);
+  }
+
+  function nodeById(id: string): SimNode | undefined {
+    return nodes.find((node) => node.id === id);
+  }
+
+  // ── activity as motion ──────────────────────────────────────────────────────
+  function pulseAt(node: SimNode, color: string, strength = 1): void {
+    const r = radius(node);
+    fxLayer
+      .append('circle')
+      .attr('class', 'bs-pulse-ring')
+      .attr('cx', node.x)
+      .attr('cy', node.y)
+      .attr('r', r)
+      .attr('stroke', color)
+      .attr('stroke-opacity', Math.min(0.95, 0.55 + 0.2 * strength))
+      .transition()
+      .duration(1100)
+      .ease(easeCubicOut)
+      .attr('r', r * (2 + strength))
+      .attr('stroke-opacity', 0)
+      .remove();
+  }
+
+  let probeGroup: Selection<SVGGElement, unknown, null, undefined> | null = null;
+
+  const handle: BeadSpaceHandle = {
+    update(next: BeadData, opts?: BeadUpdateOptions) {
       if (destroyed) return;
+      if (opts?.enter) {
+        fxLayer.selectAll('*').interrupt().remove();
+        // A new level starts unselected: a body that keeps its id across levels (the
+        // galaxy you dived into is the next level's sun) must not dim everything else.
+        selectedId = null;
+        tooltip.hidden = true;
+        ingest(next, true);
+        arrive(opts);
+        return;
+      }
       ingest(next, false);
+    },
+    flyTo(id: string, opts?: { scale?: number; duration?: number }) {
+      const node = nodeById(id);
+      if (destroyed || !node) return Promise.resolve();
+      userMovedCamera = true;
+      const current = zoomTransform(svgElement);
+      const [minK, maxK] = options.scaleExtent ?? [0.3, 5];
+      const k = Math.max(minK, Math.min(maxK, opts?.scale ?? current.k * 3));
+      return animateTo(centeredOn(node.x, node.y, k), opts?.duration ?? FLIGHT_MS);
+    },
+    zoomBy(factor: number, opts?: { duration?: number }) {
+      if (destroyed) return Promise.resolve();
+      userMovedCamera = true;
+      const current = zoomTransform(svgElement);
+      const [minK, maxK] = options.scaleExtent ?? [0.3, 5];
+      const k = Math.max(minK, Math.min(maxK, current.k * factor));
+      return animateTo(centeredOn(current.invertX(width / 2), current.invertY(height / 2), k), opts?.duration ?? 420);
+    },
+    nodeNearCenter() {
+      if (nodes.length === 0) return null;
+      const t = zoomTransform(svgElement);
+      const cx = t.invertX(width / 2);
+      const cy = t.invertY(height / 2);
+      let best: SimNode | null = null;
+      let bestD = Infinity;
+      for (const node of nodes) {
+        const d = Math.hypot(node.x - cx, node.y - cy) - radius(node);
+        if (d < bestD) {
+          bestD = d;
+          best = node;
+        }
+      }
+      return best;
+    },
+    pulse(id: string, opts?: { color?: string; strength?: number }) {
+      const node = nodeById(id);
+      if (destroyed || !node || paused) return;
+      if (!motionAllowed) {
+        nodeSelection.filter((n) => n.id === id).classed('bs-flash', true);
+        window.setTimeout(() => nodeSelection.filter((n) => n.id === id).classed('bs-flash', false), 600);
+        return;
+      }
+      pulseAt(node, opts?.color ?? tintColor(node), opts?.strength ?? 1);
+    },
+    packet(fromId: string, toId: string, opts?: { color?: string; duration?: number }) {
+      const from = nodeById(fromId);
+      const to = nodeById(toId);
+      if (destroyed || !from || !to) return false;
+      if (paused) return true;
+      const color = opts?.color ?? tintColor(from);
+      if (!motionAllowed || from === to) {
+        pulseAt(to, color, 0.6);
+        return true;
+      }
+      const dot = fxLayer
+        .append('circle')
+        .attr('class', 'bs-packet')
+        .attr('r', 3.2)
+        .attr('fill', color)
+        .attr('filter', `url(#${shipGlowId})`);
+      dot
+        .transition()
+        .duration(opts?.duration ?? 1150)
+        .ease(easeCubicInOut)
+        .attrTween('transform', () => (t: number) => {
+          // Read live positions each frame so a packet tracks a body that is still settling.
+          const x = from.x + (to.x - from.x) * t;
+          const y = from.y + (to.y - from.y) * t - Math.sin(Math.PI * t) * 18;
+          return `translate(${x} ${y})`;
+        })
+        .on('end', () => {
+          dot.remove();
+          if (!destroyed) pulseAt(to, color, 0.5);
+        });
+      return true;
+    },
+    probe(id: string | null, opts?: { color?: string; label?: string }) {
+      if (destroyed) return;
+      const node = id ? nodeById(id) : undefined;
+      if (!node) {
+        probeGroup?.remove();
+        probeGroup = null;
+        return;
+      }
+      const color = opts?.color ?? '#5EC9CC';
+      if (!probeGroup) {
+        const created = probeLayer.append('g').attr('class', 'bs-probe');
+        created.attr('transform', `translate(${node.x} ${node.y - radius(node) - 14})`);
+        created.append('path').attr('d', 'M0,-6 L5,0 L0,6 L-5,0 Z').attr('class', 'bs-probe-body');
+        created.append('text').attr('class', 'bs-probe-label').attr('y', -10);
+        probeGroup = created as unknown as typeof probeGroup;
+      }
+      probeGroup!.select('path').attr('fill', color).attr('filter', `url(#${shipGlowId})`);
+      probeGroup!.select('text').text(opts?.label ?? '');
+      const target = `translate(${node.x} ${node.y - radius(node) - 14})`;
+      if (motionAllowed) probeGroup!.transition().duration(900).ease(easeCubicInOut).attr('transform', target);
+      else probeGroup!.attr('transform', target);
+    },
+    screenPosition(id: string) {
+      const node = nodeById(id);
+      if (!node) return null;
+      const t = zoomTransform(svgElement);
+      return { x: t.applyX(node.x), y: t.applyY(node.y) };
     },
     select(id: string | null) {
       if (destroyed) return;
@@ -1244,6 +1618,9 @@ export function createBeadSpace(
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      cancelLongPress();
+      if (cullFrame !== null) window.cancelAnimationFrame(cullFrame);
+      cullFrame = null;
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', onVisibilityChange);
       }
@@ -1261,4 +1638,5 @@ export function createBeadSpace(
       root.remove();
     },
   };
+  return handle;
 }

@@ -10,8 +10,10 @@ export {
 
 export {
   fromAgentActivity,
+  fromAgentRoster,
   mergeAgentGraphs,
   type AgentTaskRecord,
+  type AgentRosterRecord,
 } from './agents';
 
 export {
@@ -30,6 +32,7 @@ export {
   fromConstellation,
   fromFleet,
   fleetServicesFromConfig,
+  normalizeFleetRecords,
   type ConstellationRecord,
   type ConstellationAgentRecord,
   type ConstellationLinkRecord,

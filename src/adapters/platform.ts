@@ -138,7 +138,60 @@ const FLEET_STATUS: Record<string, BeadStatus> = {
   restarting: 'in_progress',
   disabled: 'deferred',
   stopped: 'deferred',
+  offline: 'deferred',
+  degraded: 'blocked',
 };
+
+/**
+ * Veil's GET /api/services answers in PascalCase (`Name`, `Status`, `Port`, `HealthOK`),
+ * the services.yaml map in snake_case (`name`, `port`, `depends_on`). The adapter used to
+ * read only the second shape, so every live record came out with `id: undefined` and the
+ * engine died on its first d3 join ("t is not iterable", owner 2026-10-22). Both shapes
+ * are read here; a record with no name at all is dropped, never drawn as `undefined`.
+ */
+export function normalizeFleetRecords(raw: unknown): {
+  services: FleetServiceRecord[];
+  health: FleetHealth;
+} {
+  const rows: unknown[] = Array.isArray(raw) ? raw : [];
+  const services: FleetServiceRecord[] = [];
+  const health: FleetHealth = {};
+  const seen = new Set<string>();
+  const list = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as Record<string, unknown>;
+    const name = typeof r.name === 'string' ? r.name : typeof r.Name === 'string' ? r.Name : '';
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const port = typeof r.port === 'number' ? r.port : typeof r.Port === 'number' ? r.Port : undefined;
+    const description =
+      typeof r.description === 'string'
+        ? r.description
+        : typeof r.DisplayName === 'string' && r.DisplayName !== name
+          ? r.DisplayName
+          : undefined;
+    services.push({
+      name,
+      port,
+      type: typeof r.type === 'string' ? r.type : undefined,
+      group: typeof r.group === 'string' ? r.group : undefined,
+      layer: typeof r.layer === 'number' ? r.layer : undefined,
+      description,
+      depends_on: list(r.depends_on),
+      docker:
+        r.docker && typeof r.docker === 'object'
+          ? (r.docker as FleetServiceRecord['docker'])
+          : undefined,
+    });
+    // Live state, when the record carries it: HealthOK beats the coarse Status word.
+    const status = typeof r.Status === 'string' ? r.Status : typeof r.status === 'string' ? r.status : '';
+    if (r.HealthOK === false && status) health[name] = /stop|offline/i.test(status) ? 'stopped' : 'unhealthy';
+    else if (status) health[name] = status;
+  }
+  return { services, health };
+}
 
 export function fromFleet(
   services: FleetServiceRecord[],
@@ -147,6 +200,11 @@ export function fromFleet(
     maxLayer = 10,
   }: { health?: FleetHealth; maxLayer?: number } = {},
 ): BeadData {
+  if (services.some((s) => !s || typeof (s as { name?: unknown }).name !== 'string')) {
+    const normal = normalizeFleetRecords(services);
+    services = normal.services;
+    health = { ...normal.health, ...health };
+  }
   const statusOf = (service: FleetServiceRecord): BeadStatus => {
     const raw = (
       health[service.name] ??
@@ -185,7 +243,7 @@ export function fromFleet(
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const links: BeadLink[] = [];
   for (const service of services) {
-    for (const dependency of service.depends_on ?? []) {
+    for (const dependency of Array.isArray(service.depends_on) ? service.depends_on : []) {
       if (!byId.has(dependency) || dependency === service.name) continue;
       // A dependency is normally just the shape of the stack (solid). It only becomes a
       // BLOCKER — the orange dashed link — when the thing depended on is actually down.

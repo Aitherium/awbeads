@@ -10,5 +10,6 @@ export type {
   BeadSpaceOptions,
   BeadStats,
   BeadStatus,
+  BeadUpdateOptions,
 } from './types';
 export * from './adapters';
