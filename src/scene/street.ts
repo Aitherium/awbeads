@@ -323,9 +323,9 @@ export function createStreet(container: HTMLElement, options: StreetOptions): St
     const H = Math.max(1, Math.floor(rect.height));
     const P = Math.max(2, Math.floor(H / 180));
     const vw = W / P;
-    // Written as half-height minus 90 (== (H/P - 180)/2): the other spelling
-    // once minified to a capital letter, a hyphen and 180 -- a ledger-id shape the
-    // vendor leak scan rejects.
+    // Written as half-height minus 90 (== (H/P - 180)/2): the minified form of the other
+    // spelling once minified to a letter, a hyphen and 180, which the vendor leak scan
+    // takes for a debt-ledger id.
     const oy = Math.max(0, Math.floor(H / P / 2 - 90)); // centre the 180-px scene vertically
     const cam = Math.min(Math.max(0, playerX - vw / 2), Math.max(0, length - vw));
     return { W, H, P, vw, cam, oy };
