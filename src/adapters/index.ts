@@ -91,3 +91,9 @@ export {
   WORK_UNIVERSE_CLUSTER_ORDER,
   type WorkUniverseRecord,
 } from './work-universe';
+
+export {
+  fromShadowBrokerEvents,
+  type ShadowBrokerEventRecord,
+  type ShadowBrokerOptions,
+} from './shadowbroker';
