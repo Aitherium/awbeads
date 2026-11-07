@@ -519,13 +519,33 @@ export function createBeadSpace(
   // bigger bodies. A culled label still shows in the hover tooltip.
   let cullFrame: number | null = null;
   const LABEL_PX = 12;
+  // A camera flight zooms every frame; culling ~300 labels per frame was the second
+  // half of the 2026-11-07 phone lag. Cull at most every CULL_MIN_MS, always with a
+  // trailing pass so the resting frame is exact.
+  const CULL_MIN_MS = 100;
+  let lastCull = 0;
+  let cullTimer: ReturnType<typeof setTimeout> | null = null;
   function scheduleLabelCull(): void {
     if (!options.labelCollision || cullFrame !== null || typeof window === 'undefined') return;
+    const wait = CULL_MIN_MS - (performance.now() - lastCull);
+    if (wait > 0) {
+      if (cullTimer === null) {
+        cullTimer = setTimeout(() => {
+          cullTimer = null;
+          scheduleLabelCull();
+        }, wait);
+      }
+      return;
+    }
     cullFrame = window.requestAnimationFrame(() => {
       cullFrame = null;
+      lastCull = performance.now();
       cullLabelsNow();
     });
   }
+  /** Last written label state per body: only a CHANGE touches the DOM. */
+  const labelShownState = new Map<string, boolean>();
+  const labelScaleState = new Map<string, number>();
   function cullLabelsNow(): void {
     if (!options.labelCollision || destroyed) return;
     const t = zoomTransform(svgElement);
@@ -547,12 +567,24 @@ export function createBeadSpace(
       });
     }
     const shown = cullLabels(boxes, { width, height });
-    nodeSelection
-      .classed('bs-label-hidden', (node) => !shown.has(node.id))
-      .select('.bs-label')
-      .attr('y', (node) => radius(node as SimNode) + 4 / t.k + fontWorld)
-      .style('font-size', `${fontWorld.toFixed(3)}px`)
-      .style('stroke-width', `${(3 / t.k).toFixed(3)}px`);
+    const fontPx = `${fontWorld.toFixed(3)}px`;
+    const strokePx = `${(3 / t.k).toFixed(3)}px`;
+    nodeSelection.each(function applyLabel(datum) {
+      const node = datum as SimNode;
+      const show = shown.has(node.id);
+      if (labelShownState.get(node.id) !== show) {
+        labelShownState.set(node.id, show);
+        (this as SVGGElement).classList.toggle('bs-label-hidden', !show);
+      }
+      // A hidden label is not drawn: size it when it next shows, not on every zoom frame.
+      if (!show || labelScaleState.get(node.id) === t.k) return;
+      labelScaleState.set(node.id, t.k);
+      const label = (this as SVGGElement).querySelector<SVGTextElement>('.bs-label');
+      if (!label) return;
+      label.setAttribute('y', String(radius(node) + 4 / t.k + fontWorld));
+      label.style.fontSize = fontPx;
+      label.style.strokeWidth = strokePx;
+    });
   }
 
   function followCamera(x: number, y: number): void {
@@ -716,6 +748,9 @@ export function createBeadSpace(
   }
 
   function syncNodes(): void {
+    // The class string and label y are rewritten below: the label caches are stale.
+    labelShownState.clear();
+    labelScaleState.clear();
     syncTintFilters();
     nodeSelection = nodeLayer
       .selectAll<SVGGElement, SimNode>('g.bs-node')
@@ -1042,6 +1077,9 @@ export function createBeadSpace(
     };
   }
 
+  /** At or above this many bodies the layout settles off-screen and paints once (see heat()). */
+  const SYNC_SETTLE_NODES = 120;
+
   // ── simulation ────────────────────────────────────────────────────────────────
   const simulation: Simulation<SimNode, SimLink> = forceSimulation<SimNode, SimLink>()
     // 0.6, not d3's 0.4 default: this field sits BEHIND a desktop whose windows
@@ -1104,19 +1142,41 @@ export function createBeadSpace(
    * alpha. The one exception is the FIRST layout of a universe created paused — it would
    * otherwise sit in d3's initial spiral until resumed — so it settles synchronously
    * (a few hundred ticks over ~60 nodes is milliseconds) and paints once.
+   *
+   * A LARGE field settles synchronously too, paused or not (measured 2026-11-07 on the
+   * 337-star blog journey: every animated tick rewrote ~3,000 SVG attributes, so the
+   * ~300 ticks of a settle ran at 4 fps on a 4x-throttled phone and the whole page
+   * lagged for over a minute). The force math is cheap; painting every tick is not. The
+   * field computes its rest positions off-screen and paints once.
    */
+  function settleNow(): void {
+    simulation.stop();
+    const ticks = Math.ceil(
+      Math.log(simulation.alphaMin() / Math.max(simulation.alpha(), simulation.alphaMin() * 1.01)) /
+        Math.log(1 - simulation.alphaDecay()),
+    );
+    simulation.tick(Math.max(1, ticks));
+    simulation.alpha(0);
+    renderTick();
+    if (autoFit()) fitToContent(false);
+  }
+
   function heat(alpha: number, isFirst = false): void {
     simulation.alpha(alpha);
+    if (nodes.length >= SYNC_SETTLE_NODES) {
+      settleNow();
+      // One frame of ships so they sit on their routes; while running, the ships' own
+      // frame loop keeps them moving without re-ticking the field.
+      if (motionAllowed && paused) animateShips(performance.now());
+      return;
+    }
     if (!paused) {
       simulation.restart();
       return;
     }
     simulation.stop();
     if (!isFirst) return;
-    const ticks = Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay()));
-    simulation.tick(ticks);
-    renderTick();
-    if (autoFit()) fitToContent(false);
+    settleNow();
     // One frame of ships so they sit on their routes, not at the origin; animateShips
     // does not re-arm itself while paused.
     if (motionAllowed) animateShips(performance.now());
@@ -1128,6 +1188,7 @@ export function createBeadSpace(
   // refresh on timers (universe-field polls every 1.2s), and re-heating on every
   // poll kept the field permanently mid-settle.
   let topologySignature = '';
+  let nodeSignatureLast = '';
 
   function ingest(next: BeadData, isFirst: boolean): void {
     const previous = new Map(nodes.map((node) => [node.id, node]));
@@ -1185,13 +1246,21 @@ export function createBeadSpace(
     // A first paint gets a full settle; a refresh whose TOPOLOGY changed gets a
     // small nudge; a same-graph refresh (status/meta only) gets none — positions
     // are already correct and a restart would only make the field twitch.
+    const nodeSignature = next.nodes.map((node) => node.id).sort().join('|');
     const nextSignature =
-      next.nodes.map((node) => node.id).sort().join('|') +
+      nodeSignature +
       '~' +
       nextLinks.map((link) => `${link.source}>${link.target}`).sort().join('|');
     const topologyChanged = isFirst || nextSignature !== topologySignature;
+    // A LARGE field whose bodies are unchanged and only its links moved keeps every body
+    // where it is: re-laying out 300+ bodies froze a phone for seconds and made the whole
+    // sky jump when a host merely highlighted a path (blog journey quest, 2026-11-07).
+    const linksOnly =
+      !isFirst && nodes.length >= SYNC_SETTLE_NODES && nodeSignature === nodeSignatureLast;
     topologySignature = nextSignature;
-    if (topologyChanged) heat(isFirst ? 1 : 0.15, isFirst);
+    nodeSignatureLast = nodeSignature;
+    if (topologyChanged && linksOnly) renderTick();
+    else if (topologyChanged) heat(isFirst ? 1 : 0.15, isFirst);
     options.onStats?.(computeStats());
     if (!topologyChanged) return;
 
@@ -1375,9 +1444,12 @@ export function createBeadSpace(
     assignAgeRadii();
     applyPins();
     renderTick();
-    // Let the cluster force re-settle into the new box rather than teleporting nodes.
-    heat(Math.max(simulation.alpha(), 0.3));
+    // Let the cluster force re-settle into the new box rather than teleporting nodes --
+    // except a LARGE field, which keeps its layout and is only re-framed: a synchronous
+    // re-settle of 300+ bodies on every panel open is seconds of frozen phone.
+    if (nodes.length < SYNC_SETTLE_NODES) heat(Math.max(simulation.alpha(), 0.3));
     if (!followedOwner) svg.call(zoom.transform, homeTransform);
+    options.onResize?.({ width, height });
   }
 
   // ── camera flights ──────────────────────────────────────────────────────────
@@ -1621,6 +1693,8 @@ export function createBeadSpace(
       cancelLongPress();
       if (cullFrame !== null) window.cancelAnimationFrame(cullFrame);
       cullFrame = null;
+      if (cullTimer !== null) clearTimeout(cullTimer);
+      cullTimer = null;
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', onVisibilityChange);
       }
