@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 import { fromEcosystem, withEcosystem, type EcosystemBrickRecord } from '../src/adapters';
 import type { BeadData } from '../src/types';
+import * as browserEntry from '../src/browser';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -202,6 +203,11 @@ check('the merged universe renders both interior and ecosystem',
   container.querySelectorAll('g.bs-node').length === merged.nodes.length,
   `${container.querySelectorAll('g.bs-node').length} vs ${merged.nodes.length}`);
 handle.destroy();
+
+// The IIFE entry carries the adapter: a page with no bundler (awdesk's Fleet window) maps
+// the registry with THIS function, never an inline copy of it.
+check('the browser (IIFE) entry exports fromEcosystem and withEcosystem',
+  browserEntry.fromEcosystem === fromEcosystem && browserEntry.withEcosystem === withEcosystem);
 
 console.log(`\n${failures === 0 ? 'PASSED' : `FAILED (${failures})`}`);
 process.exit(failures === 0 ? 0 : 1);
